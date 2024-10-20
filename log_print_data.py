@@ -91,25 +91,5 @@ def log_print_data(temperature, bed_temperature, speed, layer_height, infill_per
 
     print(f"Print data logged: {temperature}°C (Extruder), {bed_temperature}°C (Bed), {speed}mm/s, {layer_height}mm, {infill_percentage}%, {print_duration}s, Quality: {quality_score}")
 
-if __name__ == "__main__":
-    # Connect to the printer and get temperature data
-    printer = PrinterConnection(port="COM3", baudrate=115200)
-    if printer.connect():
-        printer.send_gcode("M105")  # Get the current extruder and bed temperatures
-        response = printer.read_response()
 
-        extruder_temp, bed_temp = parse_temperatures(response)
-        print(f"Extruder Temperature: {extruder_temp}°C, Bed Temperature: {bed_temp}°C")
-
-        # Input other print parameters
-        speed = float(input("Print Speed (mm/s): "))
-        layer_height = float(input("Layer Height (mm): "))
-        infill_percentage = float(input("Infill Percentage (%): "))
-        print_duration = int(input("Enter print duration in seconds: "))
-        quality_score = float(input("Rate the print quality (1-10 or 0-1 scale): "))
-
-        # Log the data
-        log_print_data(extruder_temp, bed_temp, speed, layer_height, infill_percentage, print_duration, quality_score)
-        
-        printer.close()
 
