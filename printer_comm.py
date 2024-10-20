@@ -110,21 +110,4 @@ class PrinterConnection:
         )
         return gcode_file
 
-# Example usage
-if __name__ == "__main__":
-    gcode_file = select_gcode_file()  # Open file dialog to select the G-code file
-
-    if gcode_file:
-        print(f"Selected G-code file: {gcode_file}")
-        file_size = os.path.getsize(gcode_file) / 1024 / 1024  # File size in MB
-        print(f"G-code File Size: {file_size:.2f} MB")
-
-        # Initialize and connect to the printer
-        printer = PrinterConnection(port="COM3", baudrate=115200)  # Adjust port if needed
-        if printer.connect():
-            # Send the selected G-code file to the printer with progress updates
-            printer.send_gcode_with_progress(gcode_file)
-            # Close the connection when done
-            printer.close()
-    else:
-        print("No file selected.")
+#
