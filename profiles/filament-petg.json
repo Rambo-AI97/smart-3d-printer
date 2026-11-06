@@ -136,7 +136,7 @@
   "; filament start gcode\n"
  ],
  "nozzle_temperature": [
-  "235"
+  "230"
  ],
  "temperature_vitrification": [
   "80"

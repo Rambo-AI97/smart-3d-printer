@@ -12,9 +12,9 @@ Printer-side values are in the printer's EEPROM (`M503` shows them).
 | 2026-11-06 | Hotend PID | P22.95 I2.09 D62.99 | EEPROM (M301) |
 | 2026-11-06 | Bed PID | P89.29 I6.40 D829.88 | EEPROM (M304) |
 | 2026-11-06 | First layer | all 5 squares stick; right side slightly far, OK | no change |
-| 2026-11-06 | PETG nozzle temp | **235 °C**, first layer 240 °C | `CALIBRATED["petg"]` |
+| 2026-11-06 | PETG nozzle temp | **230 °C**, first layer 240 °C (235 strung) | `CALIBRATED["petg"]` |
 | 2026-11-06 | PETG bed temp | 70 °C (held with brim) | stock |
-| | Retraction | _pending_ (stock 1.2 mm) | |
+| 2026-11-06 | Retraction | stock 1.2 mm kept: 0.2–1.6 mm all strung the same → not retraction; likely damp PETG (dry it, retest) | |
 | | Flow | _pending_ (stock) | |
 
 ## Why each test, in order

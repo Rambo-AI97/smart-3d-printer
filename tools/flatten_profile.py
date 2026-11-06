@@ -22,7 +22,7 @@ FILAMENTS = {
 # Our calibration results, applied on top of the system presets (date: test that set it).
 CALIBRATED = {
     "petg": {
-        "nozzle_temperature": ["235"],                # 2026-11-06 temp tower: 220-255 all clean, strong; 235 = margin above 230
+        "nozzle_temperature": ["230"],                # 2026-11-06 temp tower: 220-255 all clean, strong; retraction test strung at 235 -> 230
         "nozzle_temperature_initial_layer": ["240"],  # a bit hotter first layer for grip
     },
 }
