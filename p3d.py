@@ -7,6 +7,7 @@
   p3d cancel                         safe stop: heaters off, lift, park
   p3d log                            print history
   p3d level [--show]                 probe the bed, save the mesh, show a colour map
+  p3d calib temp|retraction|flow|firstlayer [-f pla|petg]   generate a calibration print (no printing)
 """
 import argparse, json, pathlib, re, shlex, subprocess, sys, time
 
@@ -105,6 +106,12 @@ def cmd_level(a):
     level.main(a.show)
 
 
+def cmd_calib(a):
+    sys.path.insert(0, str(ROOT / "tools"))
+    import calib
+    calib.run(a.test, a.filament)
+
+
 def cmd_cancel(_):
     STOP.touch()
     print("cancel requested; the sender will turn heaters off and park")
@@ -124,4 +131,7 @@ if __name__ == "__main__":
     sub.add_parser("log").set_defaults(fn=cmd_log)
     s = sub.add_parser("level", help="probe the bed and show the map (--show: no probing)")
     s.add_argument("--show", action="store_true"); s.set_defaults(fn=cmd_level)
+    s = sub.add_parser("calib", help="generate a calibration print")
+    s.add_argument("test", choices=["temp", "retraction", "flow", "firstlayer"])
+    s.add_argument("-f", "--filament", default="pla", choices=["pla", "petg"]); s.set_defaults(fn=cmd_calib)
     a = p.parse_args(); a.fn(a)
