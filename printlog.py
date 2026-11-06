@@ -3,10 +3,11 @@
   python3 printlog.py import      add past G-code files found on this PC (sliced jobs)
   python3 printlog.py stats       snapshot the printer's lifetime counters (M78)
 """
-import csv, datetime, pathlib, re, sys, time
+import csv, datetime, os, pathlib, re, sys, time
 
 ROOT = pathlib.Path(__file__).resolve().parent
-DATA = ROOT / "data"
+# Logs live in the family hub (Syncthing → Rambo). Override with P3D_DATA.
+DATA = pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d"))
 LOG = DATA / "print_log.csv"
 STATS = DATA / "printer_stats.csv"
 FIELDS = ["date", "name", "status", "est_min", "actual_min", "grams", "filament", "layer_mm", "nozzle_mm", "source", "file"]

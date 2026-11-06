@@ -4,11 +4,11 @@ Usage: p3d level            probe now, cold (printer moves!)
        p3d level --hot 70   heat the bed to 70 C, settle 5 min, then probe (best: matches printing)
        p3d level --show     just show the mesh already saved in the printer
 """
-import csv, pathlib, re, sys, time
+import csv, os, pathlib, re, sys, time
 import serial
 
 PORT = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
-DATA = pathlib.Path(__file__).resolve().parent.parent / "data"
+DATA = pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d"))
 GOOD, OK = 0.30, 0.60  # mm span: good / usable
 
 
