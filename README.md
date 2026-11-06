@@ -8,6 +8,8 @@ p3d print jobs/<job>/<model>.gcode     # runs in the background (systemd user un
 p3d status                             # progress, temps
 p3d cancel                             # heaters off, lift, park
 p3d log                                # print history (logs live in ~/.local/share/p3d)
+p3d rate [1-5] [--issues stringing,adhesion] [--note "text"] [--job NAME]   # rate the last print (no args: show it)
+p3d history                            # totals, success rate, hours, grams, avg rating, last 5
 p3d level [--show]                     # probe the bed + colour map with what to adjust (--show = no movement)
 ```
 
@@ -22,6 +24,14 @@ p3d level [--show]                     # probe the bed + colour map with what to
   - `firstlayer`: one 0.2 mm layer, 5 squares (centre + 4 corners) to judge squish and tilt; ~4 min.
 - `tools/probe.py`: read-only check of firmware, settings and temps.
 - Legacy (2024, unsafe, don't use): `printer_comm.py`, `printer_test.py`, `log_print_data.py`, `ml_model.py`.
+
+## Data we record
+All in `~/.local/share/p3d/` (override `P3D_DATA`); new columns are appended at the end, old rows keep empty cells.
+- `print_log.csv` (one row per job): date, name, status, est_min, actual_min, grams, filament, layer_mm, nozzle_mm, source, file; then started, ended, nozzle_set, bed_set, flow_ratio, retraction_mm, quality (draft/standard/fine/calib), outer_speed (outer wall mm/s), max_nozzle, min_nozzle (lowest after layer 1 while heating: temp dips), avg_bed, layers, samples_file, rating (1-5), issues (tags), notes, model (source STL). Slicer settings come from the G-code header comments; rating/issues/notes are set with `p3d rate`.
+- `prints/<YYYYMMDD-HHMM>-<name>.csv` (one per print, row every 30 s + end): time, elapsed_min, progress, remaining_min, z, layer, nozzle, nozzle_target, bed, bed_target.
+- `printer_stats.csv`: date, prints, finished, failed, total_hours, longest_hours, filament_m (M78 lifetime counters, appended after every print and by `printlog.py stats`).
+- `bed_mesh_log.csv`: date, span_mm, grid_rows_front_to_back (every `p3d level`; 0.30 good, 0.60 usable).
+- Dashboard "History" tab charts all of it (`/api/history`, `/api/print/<file>`); the Calibration card is read from `CALIBRATION.md`.
 
 ## Safety rules for the assistant
 1. Never start a print without a human saying "print it" AND confirming the bed is clear.

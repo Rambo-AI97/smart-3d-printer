@@ -3,7 +3,7 @@
 Writes progress to state.json, stops cleanly when the STOP file appears, pings ntfy when done/failed.
 Run via `p3d print`, not directly.
 """
-import json, os, pathlib, re, subprocess, sys, time
+import csv, json, os, pathlib, re, subprocess, sys, time
 import serial
 import printlog
 
@@ -134,17 +134,87 @@ def main(path):
     started = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t0))
     link = Link()
     cur = {"z": None, "layer": None, "pct": None, "rem": None, "last": 0.0, "z_seen": set()}
-    layer_zs = []
+    stamp = time.strftime("%Y%m%d-%H%M", time.localtime(t0))
+    samples = printlog.DATA / "prints" / f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]+', '_', name)}.csv"
+    sm = {"last": 0.0, "ok": True, "max_n": None, "min_n": None, "bed_sum": 0.0, "bed_n": 0}
+    COLS = ["time", "elapsed_min", "progress", "remaining_min", "z", "layer", "nozzle", "nozzle_target", "bed", "bed_target"]
+
+    def metrics(i):
+        now = time.time()
+        pct = cur["pct"] if cur["pct"] is not None else round(100 * i / total, 1)
+        rem = cur["rem"]
+        if rem is None and est and pct:
+            rem = max(round(est * (1 - pct / 100), 1), 0)
+        return now, pct, rem
+
+    def track():
+        n, nt, b = link.t.get("nozzle"), link.t.get("nozzle_target"), link.t.get("bed")
+        if n is not None:
+            sm["max_n"] = n if sm["max_n"] is None else max(sm["max_n"], n)
+            if (cur["layer"] or 0) >= 2 and (nt or 0) > 150:  # after the first layer, heater on
+                sm["min_n"] = n if sm["min_n"] is None else min(sm["min_n"], n)
+        if b is not None and (link.t.get("bed_target") or 0) > 0:
+            sm["bed_sum"] += b
+            sm["bed_n"] += 1
+
+    def sample(i, force=False):
+        """One CSV row every 30 s (and at the end). Never lets logging break the print."""
+        now, pct, rem = metrics(i)
+        if not sm["ok"] or (not force and now - sm["last"] < 30):
+            return
+        sm["last"] = now
+        try:
+            samples.parent.mkdir(parents=True, exist_ok=True)
+            new = not samples.exists()
+            with open(samples, "a", newline="") as f:
+                w = csv.writer(f)
+                if new:
+                    w.writerow(COLS)
+                w.writerow([time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(now)), round((now - t0) / 60, 2), pct, rem,
+                            cur["z"], cur["layer"], link.t.get("nozzle"), link.t.get("nozzle_target"),
+                            link.t.get("bed"), link.t.get("bed_target")])
+        except Exception:
+            sm["ok"] = False
+
+    def extra():
+        e = {"started": started.replace("T", " ")[:16], "ended": time.strftime("%Y-%m-%d %H:%M"),
+             "max_nozzle": sm["max_n"], "min_nozzle": sm["min_n"],
+             "avg_bed": round(sm["bed_sum"] / sm["bed_n"], 1) if sm["bed_n"] else ""}
+        if samples.exists():
+            e["samples_file"] = f"prints/{samples.name}"
+        return e
+
+    def finish(status, mins):
+        """Final sample, log row, lifetime counters (M78). Failures here must not break the job end."""
+        try:
+            sample(total, force=True)
+        except Exception:
+            pass
+        try:
+            printlog.log_job(path, status, mins, extra=extra())
+        except Exception:
+            pass
+        try:
+            ser = link.ser
+            ser.reset_input_buffer()
+            ser.write(b"M78\n")
+            buf, end = "", time.time() + 6
+            while time.time() < end:
+                buf += ser.readline().decode(errors="replace")
+                if "Filament used" in buf:
+                    break
+            printlog.append_stats(buf)
+        except Exception:
+            pass
 
     def write(status="printing", i=0, force=False):
         now = time.time()
         if not force and now - cur["last"] < 5:
             return
         cur["last"] = now
-        pct = cur["pct"] if cur["pct"] is not None else round(100 * i / total, 1)
-        rem = cur["rem"]
-        if rem is None and est and pct:
-            rem = max(round(est * (1 - pct / 100), 1), 0)
+        track()
+        sample(i)
+        _, pct, rem = metrics(i)
         eta = time.strftime("%H:%M", time.localtime(now + rem * 60)) if rem is not None else None
         save(file=name, status=status, progress=pct, remaining_min=rem,
              elapsed_min=round((now - t0) / 60, 1), eta=eta, z=cur["z"], layer=cur["layer"],
@@ -174,13 +244,13 @@ def main(path):
         link.run(lines, check_stop=True, on_progress=progress)
         mins = round((time.time() - t0) / 60)
         save(file=name, status="done", progress=100, minutes=mins, **job)
-        notify("Print done", f"{name}: {mins} min", "white_check_mark")
-        printlog.log_job(path, "done", mins)
+        notify("Print done", f"{name}: {mins} min. Rate it: p3d rate 1-5", "white_check_mark")
+        finish("done", mins)
     except KeyboardInterrupt as stop:
         link.run(SAFE_STOP)
         save(file=name, status="cancelled", at_line=stop.args[0] if stop.args else None, of=total, **job)
         notify("Print cancelled", name, "stop_sign")
-        printlog.log_job(path, "cancelled", round((time.time() - t0) / 60))
+        finish("cancelled", round((time.time() - t0) / 60))
     except Exception as e:
         try:
             link.run(SAFE_STOP)
@@ -188,7 +258,7 @@ def main(path):
             pass
         save(file=name, status="failed", error=str(e), **job)
         notify("Print FAILED", f"{name}: {e}", "warning")
-        printlog.log_job(path, "failed", round((time.time() - t0) / 60))
+        finish("failed", round((time.time() - t0) / 60))
         raise
     finally:
         STOP.unlink(missing_ok=True)

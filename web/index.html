@@ -25,9 +25,19 @@ h1{font-size:20px;margin:0;font-weight:600;display:flex;justify-content:space-be
 canvas{width:100%;height:150px;display:block;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td.s-failed{color:var(--bad)}td.s-cancelled{color:var(--warn)}
+.tabs{display:flex;gap:8px}.tabs button{background:var(--card);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:6px 16px;font:inherit;font-size:14px;cursor:pointer}
+.tabs button.on{background:#12304f;color:var(--acc);border-color:var(--acc)}
+.hide{display:none!important}#live,#hist{display:grid;gap:14px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.grid2{grid-template-columns:1fr}}
+.cv{height:190px}.leg{font-size:12px;color:var(--mute);margin-top:4px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips button{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
+.chips button.on{border-color:var(--acc);color:var(--acc)}.chips button:disabled{opacity:.35;cursor:default}
+.cal{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:14px}.cal span{color:var(--mute);font-size:12px;display:block}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
 </style></head><body><main>
 <h1>Printer <span id="upd">connecting...</span></h1>
+<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button></div>
+<div id="live">
 <section class="card hero">
   <img id="pv" alt="model preview" style="visibility:hidden">
   <div>
@@ -52,6 +62,21 @@ th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td
 </section>
 <section class="card"><div class="lab" style="margin-bottom:6px">Recent prints</div>
   <table><thead><tr><th>Date</th><th>Name</th><th>Status</th><th>Min</th></tr></thead><tbody id="log"></tbody></table></section>
+</div>
+<div id="hist" class="hide">
+<section class="card"><div class="lab">Printer lifetime</div><div id="life" style="margin-top:6px">–</div></section>
+<div class="grid2">
+<section class="card"><div class="lab">Prints per week</div><canvas class="cv" id="c-weeks"></canvas><div class="leg"><i style="background:#3ecf8e"></i>done<i style="background:#f5a524"></i>cancelled<i style="background:#ef5350"></i>failed</div></section>
+<section class="card"><div class="lab">Filament per week (g)</div><canvas class="cv" id="c-grams"></canvas></section>
+<section class="card"><div class="lab">Estimated vs actual minutes</div><canvas class="cv" id="c-est"></canvas><div class="leg">on the line = slicer was right; above = took longer</div></section>
+<section class="card"><div class="lab">Rating over time</div><canvas class="cv" id="c-rate"></canvas></section>
+<section class="card"><div class="lab">Bed mesh span (mm)</div><canvas class="cv" id="c-mesh"></canvas><div class="leg"><i style="background:#3ecf8e"></i>0.30 good<i style="background:#f5a524"></i>0.60 usable</div></section>
+<section class="card"><div class="lab">Issues by tag</div><canvas class="cv" id="c-issues"></canvas></section>
+</div>
+<section class="card"><div class="lab">Job curve (tap a job)</div><div class="chips" id="jobs"></div><canvas class="cv" id="c-job" style="height:230px"></canvas>
+<div class="leg"><i style="background:#ff7a45"></i>nozzle<i style="background:#4ea1ff"></i>bed<i style="background:#3ecf8e"></i>progress % (right axis)</div><div class="leg" id="jobinfo"></div></section>
+<section class="card"><div class="lab">Calibration</div><div class="cal" id="cal" style="margin-top:8px"></div></section>
+</div>
 </main>
 <script>
 const $=id=>document.getElementById(id), D='–';
@@ -106,5 +131,63 @@ async function tick(){
 }
 async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-store'})).json();
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
-tick();logs();setInterval(tick,3000);setInterval(logs,30000);addEventListener('resize',chart);
+
+let curTab='live',histLoaded=0,H=null;
+function tab(t){curTab=t;for(const k of['live','hist']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
+  if(t==='hist'){loadHist()}else chart()}
+const COL={done:'#3ecf8e',cancelled:'#f5a524',failed:'#ef5350',acc:'#4ea1ff',noz:'#ff7a45'};
+function cv(id){const c=$(id),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;
+  const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);x.font='11px system-ui';return{x,w,h}}
+function empty(g,msg){g.x.fillStyle='#8b92a1';g.x.fillText(msg||'no data yet',8,g.h/2)}
+// shared axes: returns X/Y mappers for numeric ranges
+function axes(g,x0,x1,y0,y1,opt={}){const L=34,R=opt.right||6,T=8,B=18,x=g.x;
+  const X=v=>L+(v-x0)/((x1-x0)||1)*(g.w-L-R),Y=v=>g.h-B-(v-y0)/((y1-y0)||1)*(g.h-B-T);
+  x.strokeStyle='#262a33';x.fillStyle='#8b92a1';x.lineWidth=1;
+  for(let i=0;i<=3;i++){const v=y0+(y1-y0)*i/3,y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(g.w-R,y);x.stroke();x.fillText(+v.toFixed(2),2,y+4)}
+  return{X,Y,L,R,B}}
+const niceMax=v=>{const p=Math.pow(10,Math.floor(Math.log10(v||1))),m=v/p;return(m<=1?1:m<=2?2:m<=5?5:10)*p};
+function bars(id,weeks,keys,cols){const g=cv(id);if(!weeks.length)return empty(g);
+  const mx=niceMax(Math.max(...weeks.map(w=>keys.reduce((s,k)=>s+w[k],0)),1)),a=axes(g,0,weeks.length,0,mx),bw=Math.min(40,(g.w-a.L-6)/weeks.length*.7);
+  weeks.forEach((w,i)=>{let acc=0;const cx=a.X(i+.5);keys.forEach((k,j)=>{const v=w[k];if(!v)return;g.x.fillStyle=cols[j];g.x.fillRect(cx-bw/2,a.Y(acc+v),bw,a.Y(acc)-a.Y(acc+v));acc+=v});
+    g.x.fillStyle='#8b92a1';g.x.fillText(w.week.slice(5),cx-14,g.h-4)})}
+function scatter(id,jobs){const g=cv(id),p=jobs.filter(j=>+j.est_min>0&&+j.actual_min>0);if(!p.length)return empty(g);
+  const mx=niceMax(Math.max(...p.map(j=>Math.max(+j.est_min,+j.actual_min)))),a=axes(g,0,mx,0,mx),x=g.x;
+  x.strokeStyle='#8b92a1';x.setLineDash([4,4]);x.beginPath();x.moveTo(a.X(0),a.Y(0));x.lineTo(a.X(mx),a.Y(mx));x.stroke();x.setLineDash([]);
+  p.forEach(j=>{x.fillStyle=COL[j.status]||COL.acc;x.beginPath();x.arc(a.X(+j.est_min),a.Y(+j.actual_min),4,0,7);x.fill()});
+  x.fillStyle='#8b92a1';x.fillText('estimated min',g.w/2-30,g.h-4)}
+function dates(rows,key){return rows.map(r=>new Date((r[key]||'').replace(' ','T')).getTime()).map(t=>isNaN(t)?0:t)}
+function rating(id,jobs){const g=cv(id),p=jobs.filter(j=>+j.rating>0);if(!p.length)return empty(g,'no ratings yet: p3d rate 1-5');
+  const t=dates(p,'date'),t0=Math.min(...t),t1=Math.max(...t,t0+864e5),a=axes(g,t0,t1,0,5),x=g.x;
+  x.strokeStyle=COL.acc;x.lineWidth=2;x.beginPath();p.forEach((j,i)=>{i?x.lineTo(a.X(t[i]),a.Y(+j.rating)):x.moveTo(a.X(t[i]),a.Y(+j.rating))});x.stroke();
+  p.forEach((j,i)=>{x.fillStyle=COL.acc;x.beginPath();x.arc(a.X(t[i]),a.Y(+j.rating),4,0,7);x.fill()})}
+function mesh(id,m){const g=cv(id);if(!m.length)return empty(g);
+  const t=dates(m,'date'),t0=Math.min(...t),t1=Math.max(...t,t0+36e5),mx=niceMax(Math.max(...m.map(r=>r.span),.7)),a=axes(g,t0,t1,0,mx),x=g.x;
+  [[.3,COL.done],[.6,COL.cancelled]].forEach(([v,c])=>{x.strokeStyle=c;x.setLineDash([5,4]);x.beginPath();x.moveTo(a.L,a.Y(v));x.lineTo(g.w-6,a.Y(v));x.stroke();x.setLineDash([])});
+  x.strokeStyle=COL.acc;x.lineWidth=2;x.beginPath();m.forEach((r,i)=>{i?x.lineTo(a.X(t[i]),a.Y(r.span)):x.moveTo(a.X(t[i]),a.Y(r.span))});x.stroke();
+  m.forEach((r,i)=>{x.fillStyle=COL.acc;x.beginPath();x.arc(a.X(t[i]),a.Y(r.span),3,0,7);x.fill()});
+  x.fillStyle='#8b92a1';x.fillText(m[0].date.slice(5,10),a.L,g.h-4);x.fillText(m[m.length-1].date.slice(5,10),g.w-40,g.h-4)}
+function hbars(id,obj){const g=cv(id),e=Object.entries(obj).sort((a,b)=>b[1]-a[1]);if(!e.length)return empty(g,'no issues tagged yet');
+  const mx=Math.max(...e.map(v=>v[1])),rh=Math.min(24,(g.h-6)/e.length),x=g.x;
+  e.forEach(([k,v],i)=>{const y=4+i*rh;x.fillStyle='#8b92a1';x.fillText(k,2,y+rh*.65);x.fillStyle=COL.cancelled;x.fillRect(100,y+2,(g.w-130)*v/mx,rh-5);x.fillStyle='#e8eaf0';x.fillText(v,104+(g.w-130)*v/mx,y+rh*.65)})}
+async function showJob(f,btn){document.querySelectorAll('#jobs button').forEach(b=>b.classList.toggle('on',b===btn));
+  const g=cv('c-job');let rows;try{rows=await (await fetch('/api/print/'+encodeURIComponent(f.split('/').pop()),{cache:'no-store'})).json()}catch(e){return empty(g,'samples not available')}
+  if(rows.length<2)return empty(g,'too few samples');
+  const t1=Math.max(...rows.map(r=>r.elapsed_min),1),vals=rows.flatMap(r=>[r.nozzle,r.bed,r.nozzle_target,r.bed_target]).filter(v=>v!=null),
+    y1=Math.max(...vals,60)+10,a=axes(g,0,t1,0,y1,{right:30}),x=g.x,line=(k,c,d,Y,w)=>{x.beginPath();x.strokeStyle=c;x.lineWidth=w;x.setLineDash(d?[4,4]:[]);let m=0;
+      rows.forEach(r=>{if(r[k]==null)return;m?x.lineTo(a.X(r.elapsed_min),Y(r[k])):x.moveTo(a.X(r.elapsed_min),Y(r[k]));m=1});x.stroke();x.setLineDash([])};
+  line('nozzle_target','#ff7a4577',1,a.Y,1);line('bed_target','#4ea1ff77',1,a.Y,1);line('nozzle',COL.noz,0,a.Y,2);line('bed',COL.acc,0,a.Y,2);
+  line('progress',COL.done,0,v=>a.Y(v/100*y1),1.5);x.fillStyle='#8b92a1';x.fillText('100%',g.w-28,a.Y(y1)+10);x.fillText(Math.round(t1)+' min',g.w-50,g.h-4);
+  const j=H.jobs.find(j=>j.samples_file===f)||{};$('jobinfo').textContent=[j.name,j.status,j.nozzle_set&&'nozzle '+j.nozzle_set,j.max_nozzle&&'max '+j.max_nozzle,j.min_nozzle&&'min after L1 '+j.min_nozzle,j.rating&&'rating '+j.rating,j.issues,j.notes].filter(Boolean).join(' · ')}
+function drawHist(){if(!H)return;bars('c-weeks',H.weeks,['done','cancelled','failed'],[COL.done,COL.cancelled,COL.failed]);
+  const gw=H.weeks.map(w=>({week:w.week,g:w.grams}));bars('c-grams',gw,['g'],[COL.acc]);scatter('c-est',H.jobs);rating('c-rate',H.jobs);mesh('c-mesh',H.mesh);hbars('c-issues',H.issues)}
+async function loadHist(){try{H=await (await fetch('/api/history',{cache:'no-store'})).json()}catch(e){return}
+  const s=H.stats;$('life').textContent=s?`${s.prints} prints (${s.failed} failed) · ${s.total_hours} h · ${s.filament_m} m filament · longest ${s.longest_hours} h · as of ${s.date}`:'no counters yet';
+  $('jobs').innerHTML='';H.jobs.slice(-30).reverse().forEach(j=>{const b=document.createElement('button');b.textContent=j.date.slice(5,10)+' '+j.name.slice(0,22);
+    if(j.samples_file)b.onclick=()=>showJob(j.samples_file,b);else{b.disabled=true;b.title='no samples recorded'}$('jobs').appendChild(b)});
+  const first=[...document.querySelectorAll('#jobs button:not(:disabled)')][0];
+  $('cal').innerHTML=H.calibration.map(c=>`<div><span>${esc(c.what)}</span>${esc(c.value)}</div>`).join('')||'–';
+  drawHist();if(first)first.click();else empty(cv('c-job'),'no per-print samples yet (recorded from the next print)')}
+const esc=s=>String(s).replace(/[<>&]/g,'');
+addEventListener('resize',()=>{if(curTab==='hist'){drawHist()}});
+tick();logs();setInterval(tick,3000);setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

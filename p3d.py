@@ -7,6 +7,8 @@
   p3d web [--open]                   live dashboard on port 8765 (systemd user service p3d-web)
   p3d cancel                         safe stop: heaters off, lift, park
   p3d log                            print history
+  p3d history                        totals, success rate, hours, grams, avg rating, last 5
+  p3d rate [N] [--issues a,b] [--note "text"] [--job NAME]   rate the last print (no args: show it)
   p3d level [--show]                 probe the bed, save the mesh, show a colour map
   p3d calib temp|retraction|flow|firstlayer [-f pla|petg]   generate a calibration print (no printing)
 """
@@ -110,6 +112,16 @@ def cmd_log(_):
         print("printer lifetime:", open(printlog.STATS).read().strip().splitlines()[-1])
 
 
+def cmd_rate(a):
+    import printlog
+    printlog.cmd_rate(a.rating, a.issues, a.note, a.job)
+
+
+def cmd_history(_):
+    import printlog
+    printlog.cmd_history()
+
+
 def cmd_level(a):
     if running():
         sys.exit("a print is running")
@@ -153,6 +165,10 @@ if __name__ == "__main__":
     s.set_defaults(fn=cmd_web)
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
     sub.add_parser("log").set_defaults(fn=cmd_log)
+    s = sub.add_parser("rate", help="rate the last print (1-5, issue tags, note)")
+    s.add_argument("rating", nargs="?", type=int); s.add_argument("--issues"); s.add_argument("--note")
+    s.add_argument("--job", help="job name instead of the last one"); s.set_defaults(fn=cmd_rate)
+    sub.add_parser("history", help="summary of all prints").set_defaults(fn=cmd_history)
     s = sub.add_parser("level", help="probe the bed and show the map (--show: no probing)")
     s.add_argument("--show", action="store_true")
     s.add_argument("--hot", type=int, default=0, metavar="BED_C", help="heat the bed first (70 for PETG, 55 for PLA)")
