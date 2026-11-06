@@ -15,21 +15,23 @@ BASE_RETRACT = 1.2  # mm, profiles/machine.json retraction_length
 # ---------- models (OpenSCAD) ----------
 
 def temp_scad(temps):
-    parts = []
+    # Sturdy tower: 1 mm base plate, blocks 30x15 standing on two 10 mm-wide legs (10 mm bridge between),
+    # 45 deg overhang fused along the whole right face. (v1 stood on two 5 mm legs and snapped off, 2026-11-06.)
+    parts = ["translate([82,96,0]) cube([46,23,1]);  // base plate"]
     for i, t in enumerate(temps):
-        z = 10 * i
+        z = 1 + 10 * i
         parts.append(f"""translate([90,100,{z}]) difference() {{
-  union() {{ cube([20,20,10]);                       // block
-    translate([20,20,5]) rotate([90,0,0]) linear_extrude(20) polygon([[0,0],[4,4],[0,4]]); }}  // 45 deg overhang on the right
-  translate([-1,5,-0.01]) cube([22,10,5.01]);        // 10 mm bridge tunnel (along X)
-  translate([10,0.8,5]) rotate([90,0,0]) linear_extrude(1) text("{t}", size=6, font="{FONT}", halign="center", valign="center");
+  union() {{ cube([30,15,10]);
+    translate([30,15,4]) rotate([90,0,0]) linear_extrude(15) polygon([[0,0],[5,5],[0,5]]); }}  // 45 deg overhang
+  translate([10,-1,-0.01]) cube([10,17,4.01]);       // 10 mm bridge (tunnel along Y)
+  translate([15,0.8,7]) rotate([90,0,0]) linear_extrude(1) text("{t}", size=4.5, font="{FONT}", halign="center", valign="center");
 }}""")
     return "\n".join(parts)
 
 
 def retraction_scad(bands):
     h = 5 * bands
-    return "\n".join(f"""translate([{x},110,0]) {{ cylinder(d=12,h=0.4,$fn=48); cylinder(d=5,h={h},$fn=48); }}"""
+    return "\n".join(f"""translate([{x},110,0]) {{ cylinder(d=12,h=0.4,$fn=48); cylinder(d=8,h={h},$fn=48); }}"""
                      for x in (90, 130))
 
 
@@ -58,14 +60,14 @@ def lines_with_z(lines):
         yield ln, z
 
 
-def post_temp(lines, temps, step_h=10):
+def post_temp(lines, temps, step_h=10, base=1.0):
     """M104 S<t> right after the ';Z:' line of the first layer of block 2..N."""
     out, done = [], set()
     for ln, z in lines_with_z(lines):
         out.append(ln)
         if ln.startswith(";Z:") and z is not None:
-            i = int((z - 0.01) // step_h)
-            if i > 0 and i not in done and abs(z - (i * step_h + 0.2)) < 1e-6:
+            i = int((z - base - 0.01) // step_h)
+            if i > 0 and i not in done and abs(z - (base + i * step_h + 0.2)) < 1e-6:
                 done.add(i)
                 out.append(f"M104 S{temps[i]} ; calib: block {i+1}\n")
     assert done == set(range(1, len(temps))), f"temp blocks missing: {sorted(done)}"
@@ -112,12 +114,13 @@ def post_flow(lines, flows, x0=31.5, pitch=33):
 def run(test, fil):
     pla = fil == "pla"
     proc, filament, post = {}, {}, (lambda l: l)
+    brim = {"brim_type": "outer_only", "brim_width": "5"}
     if test == "temp":
         temps = list(range(230, 190, -5)) if pla else list(range(255, 215, -5))
         scad = temp_scad(temps)
         filament = {"nozzle_temperature": [str(temps[0])], "nozzle_temperature_initial_layer": [str(temps[0])]}
         post = lambda l: post_temp(l, temps)
-        note = (f"Temperature tower, bottom block {temps[0]} C, top block {temps[-1]} C (blocks of 10 mm, -5 C each).\n"
+        note = (f"Temperature tower, bottom block {temps[0]} C, top block {temps[-1]} C (1 mm base, then blocks of 10 mm, -5 C each).\n"
                 "Judge per block: bridge over the tunnel (sagging/drooping), the 45 deg wedge on the right, "
                 "stringing, surface gloss, layer bonding (snap a corner), legibility of the engraved number on the front.\n"
                 "Pick the lowest temperature with a clean bridge and strong layers. The number is the temperature of that block.")
@@ -154,6 +157,8 @@ def run(test, fil):
                    check=True, capture_output=True)
     pj, fj = out / "process.json", out / "filament.json"
     p = json.load(open(ROOT / "profiles/process-standard.json")); p.update(proc)
+    if test != "firstlayer":
+        p.update(brim)
     f = json.load(open(ROOT / f"profiles/filament-{fil}.json")); f.update(filament)
     pj.write_text(json.dumps(p)); fj.write_text(json.dumps(f))
     gdir = out / "slice"
