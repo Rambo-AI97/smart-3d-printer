@@ -61,6 +61,19 @@ def fix_machine(d):
             "G28 ;Home \n", "G28 ;Home \nM420 S1 Z10 ;Use saved bed mesh\n", 1)
 
 
+def write_gui_filament(key, name):
+    """Same calibrated values as an Orca GUI user preset '<KEY> (Axiom)', so GUI and CLI slice alike."""
+    gui = pathlib.Path.home() / ".config/OrcaSlicer/user/default/filament"
+    gui.mkdir(parents=True, exist_ok=True)
+    title = f"{key.upper()} (Axiom)"
+    d = {"inherits": name, "name": title, "from": "User", "filament_settings_id": [title],
+         **CALIBRATED[key]}
+    json.dump(d, open(gui / f"{title}.json", "w"), indent=4)
+    base = resolve(name, "filament").get("setting_id", "")
+    (gui / f"{title}.info").write_text(f"sync_info = create\nuser_id = \nsetting_id = \nbase_id = {base}\nupdated_time = 0\n")
+    print(f"GUI preset: {title}")
+
+
 if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     write("machine", MACHINE, "machine.json", fix_machine)
@@ -69,3 +82,6 @@ if __name__ == "__main__":
     for key, name in FILAMENTS.items():
         write("filament", name, f"filament-{key}.json",
               lambda d, k=key: d.update(filament_settings_id=[d["name"]], **CALIBRATED.get(k, {})))
+    for key, name in FILAMENTS.items():
+        if key in CALIBRATED:
+            write_gui_filament(key, name)
