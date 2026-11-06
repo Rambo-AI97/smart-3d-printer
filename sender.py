@@ -52,6 +52,9 @@ class Link:
         nxt, last = n + 1, time.time()
         while True:
             line = self.ser.readline().decode(errors="replace").strip()
+            if STOP.exists() and cmd.startswith(("M109", "M190")) and not getattr(self, "broke", False):
+                self.ser.write(b"M108\n")  # emergency parser: break out of the heat-up wait
+                self.broke = True
             if not line:
                 if time.time() - last > SILENCE_LIMIT:
                     raise RuntimeError(f"no reply for {SILENCE_LIMIT}s after: {cmd}")
