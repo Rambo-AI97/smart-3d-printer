@@ -151,6 +151,46 @@ def cmd_cancel(_):
     print("cancel requested; the sender will turn heaters off and park")
 
 
+MODELS = ROOT / "models"
+
+
+def _to_stl(src, out, length, flat=0.0, thicken=None, voxel=None):
+    """Blender headless: model -> solid STL + preview PNG (tools/model/to_stl.py)."""
+    cmd = ["blender", "-b", "-P", str(ROOT / "tools/model/to_stl.py"), "--", str(src), str(out),
+           "--length", str(length), "--flat", str(flat), "--png", str(out.with_suffix(".png"))]
+    if thicken: cmd += ["--thicken", str(thicken)]
+    if voxel: cmd += ["--voxel", str(voxel)]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    lines = [l for l in r.stdout.splitlines() if l.startswith(("SIZE_MM", "PREVIEW"))]
+    if r.returncode or not lines:
+        sys.exit("blender failed:\n" + (r.stdout + r.stderr)[-1500:])
+    print("\n".join(lines)); print("stl:", out)
+
+
+def cmd_model(a):
+    src = pathlib.Path(a.src).expanduser().resolve()
+    out = pathlib.Path(a.out).expanduser().resolve() if a.out else MODELS / src.stem / (src.stem + ".stl")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    _to_stl(src, out, a.length, a.flat, a.thicken, a.voxel)
+
+
+def cmd_game(a):
+    presets = json.loads((MODELS / "presets.json").read_text())
+    if a.name not in presets:
+        sys.exit("presets: " + ", ".join(k for k in presets if not k.startswith("_")))
+    c = presets[a.name]
+    d = MODELS / a.name; d.mkdir(parents=True, exist_ok=True)
+    glb = d / (a.name + ".glb")
+    env = dict(__import__("os").environ, GD_SCRIPT=c["script"], GD_ARGS=json.dumps(c.get("args", [])),
+               GD_HIDE=c.get("hide", ""), OUT=str(glb))
+    r = subprocess.run(["godot", "--headless", "--path", str(pathlib.Path(c["game"]).expanduser()),
+                        "-s", str(ROOT / "tools/model/godot_export.gd")], env=env, capture_output=True, text=True, timeout=300)
+    if "EXPORT" not in r.stdout:
+        sys.exit("godot export failed:\n" + (r.stdout + r.stderr)[-1500:])
+    _to_stl(glb, d / (a.name + ".stl"), a.length or c.get("length", 85), c.get("flat", 0.0), c.get("thicken"), c.get("voxel"))
+    if c.get("note"): print("note:", c["note"])
+
+
 if __name__ == "__main__":
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -176,4 +216,10 @@ if __name__ == "__main__":
     s = sub.add_parser("calib", help="generate a calibration print")
     s.add_argument("test", choices=["temp", "retraction", "flow", "firstlayer"])
     s.add_argument("-f", "--filament", default="petg", choices=["pla", "petg"]); s.set_defaults(fn=cmd_calib)
+    s = sub.add_parser("model", help="any .glb/.obj/.fbx/.stl -> solid printable STL + preview")
+    s.add_argument("src"); s.add_argument("-o", "--out"); s.add_argument("--length", type=float, default=85, help="longest side mm")
+    s.add_argument("--flat", type=float, default=0.0, help="cut this fraction of the height off for a flat base")
+    s.add_argument("--thicken", type=float); s.add_argument("--voxel", type=float); s.set_defaults(fn=cmd_model)
+    s = sub.add_parser("game", help="export a code-built game model by preset (models/presets.json) -> STL")
+    s.add_argument("name"); s.add_argument("--length", type=float); s.set_defaults(fn=cmd_game)
     a = p.parse_args(); a.fn(a)
