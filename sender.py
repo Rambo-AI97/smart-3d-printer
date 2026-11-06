@@ -74,6 +74,7 @@ class Link:
         self.ser.reset_input_buffer()
         self.temps = ""
         self.t = {}
+        self.on_temp = None   # called on every temp report, so the dashboard updates during heat-up waits
         self.exchange(0, "M110 N0")  # reset line numbering
 
     def exchange(self, n, cmd):
@@ -94,6 +95,8 @@ class Link:
             if "T:" in line:
                 self.temps = line.replace("ok", "").strip()
                 self.t.update(parse_temps(line))
+                if self.on_temp:
+                    self.on_temp()
             if low.startswith(("resend", "rs:")):
                 digits = "".join(ch for ch in line.split(":")[-1] if ch.isdigit())
                 nxt = int(digits) if digits else n
@@ -223,6 +226,7 @@ def main(path):
              temps=link.temps, started=started, updated=time.strftime("%Y-%m-%dT%H:%M:%S"), **job)
 
     def progress(i):
+        cur["i"] = i
         cmd = lines[i - 2] if i >= 2 else ""  # the line just acknowledged
         m = re.match(r"M73 P(\d+)(?: R(\d+))?", cmd)
         if m:
@@ -238,6 +242,7 @@ def main(path):
         write(i=i)
 
     write(i=0, force=True)
+    link.on_temp = lambda: write(i=cur.get("i", 0))  # write() rate-limits itself to every 5 s
     notify("Print started", name, "printer")
 
     try:

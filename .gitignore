@@ -3,3 +3,4 @@ state.json
 STOP
 __pycache__/
 data/
+models/*/
