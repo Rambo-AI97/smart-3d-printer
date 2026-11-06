@@ -11,6 +11,7 @@ p3d log                                # print history (logs live in ~/.local/sh
 p3d level [--show]                     # probe the bed + colour map with what to adjust (--show = no movement)
 ```
 
+- Live dashboard: `p3d web [--open]` -> http://localhost:8765 (phone: http://<tailscale-ip>:8765 over Tailscale). Read-only page with model preview, progress, time left, ETA, layer/Z, nozzle/bed temps chart, recent prints. Runs as systemd user service `p3d-web` (`web/server.py`, stdlib only). `sender.py` writes `state.json` every 5 s (M73 progress, Z, layers, M155 temps); `preview.py` renders `preview.png` per job with OpenSCAD.
 - `profiles/`: standalone Orca Slicer profiles built from Orca's stock V3 SE 0.4 presets (`python3 tools/flatten_profile.py`). Change settings here, not in the GUI.
 - `sender.py`: streams G-code with line numbers and checksums, waits for each `ok`, resends lines Marlin asks for, and sends ntfy alerts.
 - `printlog.py`: job log `~/.local/share/p3d/print_log.csv` (family hub, syncs to the home server) (each p3d job + past G-code found on this PC) and lifetime counters from the printer (`printlog.py stats`).

@@ -4,6 +4,7 @@
   p3d status                         temps + current job
   p3d slice MODEL [-q draft|standard|fine] [-f pla|petg] [--supports] [--brim]
   p3d print FILE.gcode               start in the background (survives this terminal)
+  p3d web [--open]                   live dashboard on port 8765 (systemd user service p3d-web)
   p3d cancel                         safe stop: heaters off, lift, park
   p3d log                            print history
   p3d level [--show]                 probe the bed, save the mesh, show a colour map
@@ -69,6 +70,12 @@ def cmd_slice(a):
             info.setdefault(m.group(1), m.group(2))
         elif line.startswith("M190 S"):
             info.setdefault("bed_temperature", line.split()[1][1:])
+    (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final)}))
+    try:
+        import preview
+        preview.make(model, out / "preview.png")
+    except Exception:
+        pass
     print(final)
     print(f"time {info.get('estimated printing time (normal mode)')}, "
           f"{info.get('total filament used [g]')} g, layer {info.get('layer_height')} mm, "
@@ -80,6 +87,11 @@ def cmd_print(a):
     if running():
         sys.exit("a print is already running")
     STOP.unlink(missing_ok=True)
+    try:
+        import preview
+        preview.for_job(g.parent)
+    except Exception:
+        pass
     # sg dialout: works before the user re-logs in after joining the group
     inner = f"exec {sys.executable} {shlex.quote(str(ROOT / 'sender.py'))} {shlex.quote(str(g))}"
     subprocess.run(["systemd-run", "--user", "--unit=p3d-print", "--collect",
@@ -112,6 +124,16 @@ def cmd_calib(a):
     calib.run(a.test, a.filament)
 
 
+def cmd_web(a):
+    urls = ["http://localhost:8765", "http://<tailscale-ip>:8765"]
+    r = subprocess.run(["systemctl", "--user", "is-active", "p3d-web"], capture_output=True, text=True)
+    if r.stdout.strip() != "active":
+        subprocess.run(["systemctl", "--user", "start", "p3d-web"], check=False)
+    print("\n".join(urls))
+    if a.open:
+        subprocess.Popen(["xdg-open", urls[0]], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def cmd_cancel(_):
     STOP.touch()
     print("cancel requested; the sender will turn heaters off and park")
@@ -127,6 +149,8 @@ if __name__ == "__main__":
     s.add_argument("--supports", action="store_true"); s.add_argument("--brim", action="store_true")
     s.set_defaults(fn=cmd_slice)
     s = sub.add_parser("print"); s.add_argument("gcode"); s.set_defaults(fn=cmd_print)
+    s = sub.add_parser("web", help="dashboard URL (starts the service if needed)"); s.add_argument("--open", action="store_true")
+    s.set_defaults(fn=cmd_web)
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
     sub.add_parser("log").set_defaults(fn=cmd_log)
     s = sub.add_parser("level", help="probe the bed and show the map (--show: no probing)")

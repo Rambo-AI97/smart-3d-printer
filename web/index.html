@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Printer</title>
+<style>
+:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--fg:#e8eaf0;--mute:#8b92a1;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#f5a524;--bad:#ef5350;--noz:#ff7a45;--bed:#4ea1ff}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif}
+main{max-width:980px;margin:0 auto;padding:16px;display:grid;gap:14px}
+h1{font-size:20px;margin:0;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
+.hero{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:18px;align-items:center}
+@media(max-width:640px){.hero{grid-template-columns:1fr}}
+#pv{width:100%;aspect-ratio:1;border-radius:10px;background:#1f2126;object-fit:contain}
+.name{font-size:26px;font-weight:650;word-break:break-word}
+.badge{display:inline-block;padding:3px 12px;border-radius:99px;font-size:13px;font-weight:600;background:var(--line);color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+.badge.printing{background:#12304f;color:var(--acc)}.badge.done{background:#10381f;color:var(--ok)}
+.badge.cancelled{background:#3d2d0a;color:var(--warn)}.badge.failed{background:#40181a;color:var(--bad)}
+.prog{display:flex;align-items:center;gap:18px;margin-top:10px}
+.ring{position:relative;width:120px;height:120px;flex:none}.ring svg{transform:rotate(-90deg)}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:26px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px 18px;flex:1}
+.stats div span{display:block;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.stats div b{font-size:22px;font-variant-numeric:tabular-nums}
+.temps{display:grid;grid-template-columns:1fr 1fr;gap:14px}.temp b{font-size:28px}.temp small{color:var(--mute)}
+.lab{color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+canvas{width:100%;height:150px;display:block;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td.s-failed{color:var(--bad)}td.s-cancelled{color:var(--warn)}
+#upd{font-size:12px;color:var(--mute);font-weight:400}
+</style></head><body><main>
+<h1>Printer <span id="upd">connecting...</span></h1>
+<section class="card hero">
+  <img id="pv" alt="model preview" style="visibility:hidden">
+  <div>
+    <span class="badge" id="badge">idle</span>
+    <div class="name" id="name">No active job</div>
+    <div class="prog">
+      <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#262a33" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#4ea1ff" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
+      <div class="stats">
+        <div><span>Time left</span><b id="left">–</b></div><div><span>Done at</span><b id="eta">–</b></div>
+        <div><span>Elapsed</span><b id="el">–</b></div><div><span>Est. total</span><b id="tot">–</b></div>
+        <div><span>Layer</span><b id="layer">–</b></div><div><span>Z height</span><b id="z">–</b></div>
+      </div>
+    </div>
+  </div>
+</section>
+<section class="card">
+  <div class="temps">
+    <div class="temp"><div class="lab">Nozzle</div><b id="noz">–</b> <small id="nozt"></small></div>
+    <div class="temp"><div class="lab">Bed</div><b id="bed">–</b> <small id="bedt"></small></div>
+  </div>
+  <canvas id="chart"></canvas>
+</section>
+<section class="card"><div class="lab" style="margin-bottom:6px">Recent prints</div>
+  <table><thead><tr><th>Date</th><th>Name</th><th>Status</th><th>Min</th></tr></thead><tbody id="log"></tbody></table></section>
+</main>
+<script>
+const $=id=>document.getElementById(id), D='–';
+const hist=[]; // {t,noz,bed,nt,bt}
+const num=v=>(v===undefined||v===null||v===''||isNaN(+v))?null:+v;
+const fmtMin=m=>{m=num(m);if(m===null)return D;m=Math.round(m);return m>=60?Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m':m+' min'};
+function parseTemps(s){const r={},t=(s||'').match(/T:\s*([\d.]+)\s*\/\s*([\d.]+)/),b=(s||'').match(/B:\s*([\d.]+)\s*\/\s*([\d.]+)/);
+  if(t){r.nozzle=+t[1];r.nozzle_target=+t[2]}if(b){r.bed=+b[1];r.bed_target=+b[2]}return r}
+function parseStarted(s){if(!s)return null;const d=new Date(s.replace(' ','T'));return isNaN(d)?new Date(s):d}
+function render(s){
+  const st=s.status||'idle';$('badge').textContent=st;$('badge').className='badge '+st;
+  $('name').textContent=s.file||'No active job';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
+  const pct=num(s.progress);$('pct').textContent=pct===null?D:Math.round(pct)+'%';
+  $('arc').setAttribute('stroke-dashoffset',326.7*(1-(pct||0)/100));
+  $('arc').setAttribute('stroke',st==='done'?'#3ecf8e':st==='failed'?'#ef5350':st==='cancelled'?'#f5a524':'#4ea1ff');
+  let el=num(s.elapsed_min),rem=num(s.remaining_min),printing=st==='printing';
+  if(printing){const t0=parseStarted(s.started);if(t0)el=(Date.now()-t0)/60000}  // tick between 5 s writes
+  if(rem===null&&printing&&pct>0&&el!==null)rem=el*(100-pct)/pct;
+  else if(rem!==null&&printing&&s.updated){const u=parseStarted(s.updated);if(u)rem=Math.max(0,rem-(Date.now()-u)/60000)}
+  let eta=D;if(printing&&rem!==null)eta=new Date(Date.now()+rem*60000).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+  else if(printing&&s.eta)eta=s.eta;
+  $('left').textContent=printing?fmtMin(rem):D;$('eta').textContent=eta;$('el').textContent=printing||s.minutes===undefined?fmtMin(el):fmtMin(s.minutes);
+  const est=num(s.est_total_min);$('tot').textContent=est!==null?fmtMin(est):(printing&&el!==null&&rem!==null?fmtMin(el+rem):D);
+  $('layer').textContent=s.layer?(s.layer+(s.total_layers?' / '+s.total_layers:'')):D;
+  $('z').textContent=num(s.z)!==null?s.z.toFixed(2)+' mm':D;
+  const tt=Object.assign(parseTemps(s.temps),Object.fromEntries(['nozzle','nozzle_target','bed','bed_target'].filter(k=>num(s[k])!==null).map(k=>[k,+s[k]])));
+  $('noz').textContent=tt.nozzle!==undefined?tt.nozzle.toFixed(0)+'°':D;$('bed').textContent=tt.bed!==undefined?tt.bed.toFixed(0)+'°':D;
+  $('nozt').textContent=tt.nozzle_target!==undefined?'/ '+tt.nozzle_target.toFixed(0)+'°':'';$('bedt').textContent=tt.bed_target!==undefined?'/ '+tt.bed_target.toFixed(0)+'°':'';
+  if(tt.nozzle!==undefined){hist.push({t:Date.now(),n:tt.nozzle,b:tt.bed,nt:tt.nozzle_target,bt:tt.bed_target});while(hist.length&&hist[0].t<Date.now()-600000)hist.shift()}
+  chart();
+}
+function chart(){
+  const c=$('chart'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;
+  const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);
+  const vals=hist.flatMap(p=>[p.n,p.b,p.nt,p.bt]).filter(v=>v!=null);
+  if(hist.length<2){x.fillStyle='#8b92a1';x.font='13px system-ui';x.fillText('collecting temperature history...',8,h/2);return}
+  const hi=Math.max(...vals,60)+10,lo=Math.max(0,Math.min(...vals)-10),t1=Date.now(),t0=t1-600000,L=34;
+  const X=t=>L+(t-t0)/600000*(w-L-4),Y=v=>h-14-(v-lo)/(hi-lo)*(h-24);
+  x.strokeStyle='#262a33';x.fillStyle='#8b92a1';x.font='11px system-ui';x.lineWidth=1;
+  for(let i=0;i<=3;i++){const v=lo+(hi-lo)*i/3,y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(w,y);x.stroke();x.fillText(Math.round(v),2,y+4)}
+  x.fillText('-10 min',L,h-1);x.fillText('now',w-26,h-1);
+  const line=(k,col,dash)=>{x.beginPath();x.strokeStyle=col;x.setLineDash(dash?[4,4]:[]);x.lineWidth=dash?1:2;let m=false;
+    hist.forEach(p=>{if(p[k]==null)return;m?x.lineTo(X(p.t),Y(p[k])):x.moveTo(X(p.t),Y(p[k]));m=true});x.stroke();x.setLineDash([])};
+  line('nt','#ff7a4577',1);line('bt','#4ea1ff77',1);line('n','#ff7a45');line('b','#4ea1ff');
+}
+let lastImgJob=null;
+async function tick(){
+  try{const s=await (await fetch('/api/state',{cache:'no-store'})).json();render(s);
+    $('upd').textContent='updated '+new Date().toLocaleTimeString();
+    const key=s.file+'|'+s.started;if(key!==lastImgJob){lastImgJob=key;const im=$('pv');im.style.visibility='hidden';im.onload=()=>im.style.visibility='visible';im.src='/api/preview.png?'+Date.now()}
+  }catch(e){$('upd').textContent='offline'}
+}
+async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-store'})).json();
+  $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
+tick();logs();setInterval(tick,3000);setInterval(logs,30000);addEventListener('resize',chart);
+</script></body></html>
