@@ -15,7 +15,7 @@ Printer-side values are in the printer's EEPROM (`M503` shows them).
 | 2026-11-06 | PETG nozzle temp | **230 °C**, first layer 240 °C (235 strung) | `CALIBRATED["petg"]` |
 | 2026-11-06 | PETG bed temp | 70 °C (held with brim) | stock |
 | 2026-11-06 | Retraction | stock 1.2 mm kept: 0.2–1.6 mm all strung the same → not retraction; likely damp PETG (dry it, retest) | |
-| | Flow | _pending_ (stock) | |
+| 2026-11-06 | Flow | **0.93** (test 90–110 % of 0.95: 90–100 smooth, 105+ ridged) | `CALIBRATED["petg"]` |
 
 ## Why each test, in order
 

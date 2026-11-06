@@ -24,6 +24,7 @@ CALIBRATED = {
     "petg": {
         "nozzle_temperature": ["230"],                # 2026-11-06 temp tower: 220-255 all clean, strong; retraction test strung at 235 -> 230
         "nozzle_temperature_initial_layer": ["240"],  # a bit hotter first layer for grip
+        "filament_flow_ratio": ["0.93"],              # 2026-11-06 flow test: 90-100 % of 0.95 smooth, 105+ ridged -> middle-low
     },
 }
 

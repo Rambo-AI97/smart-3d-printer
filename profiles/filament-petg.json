@@ -43,7 +43,7 @@
   "; filament end gcode \n"
  ],
  "filament_flow_ratio": [
-  "0.95"
+  "0.93"
  ],
  "reduce_fan_stop_start_freq": [
   "1"
