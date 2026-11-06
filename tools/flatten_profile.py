@@ -19,6 +19,14 @@ FILAMENTS = {
     "petg": "Creality Generic PETG @Ender-3V3-all",
 }
 
+# Our calibration results, applied on top of the system presets (date: test that set it).
+CALIBRATED = {
+    "petg": {
+        "nozzle_temperature": ["235"],                # 2026-11-06 temp tower: 220-255 all clean, strong; 235 = margin above 230
+        "nozzle_temperature_initial_layer": ["240"],  # a bit hotter first layer for grip
+    },
+}
+
 
 def find(name, kind):
     for vendor in ("Creality", "OrcaFilamentLibrary"):
@@ -59,4 +67,5 @@ if __name__ == "__main__":
     for key, name in PROCESSES.items():
         write("process", name, f"process-{key}.json", lambda d: d.update(print_settings_id=d["name"]))
     for key, name in FILAMENTS.items():
-        write("filament", name, f"filament-{key}.json", lambda d: d.update(filament_settings_id=[d["name"]]))
+        write("filament", name, f"filament-{key}.json",
+              lambda d, k=key: d.update(filament_settings_id=[d["name"]], **CALIBRATED.get(k, {})))
