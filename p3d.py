@@ -6,6 +6,7 @@
   p3d print FILE.gcode               start in the background (survives this terminal)
   p3d cancel                         safe stop: heaters off, lift, park
   p3d log                            print history
+  p3d level [--show]                 probe the bed, save the mesh, show a colour map
 """
 import argparse, json, pathlib, re, shlex, subprocess, sys, time
 
@@ -96,6 +97,14 @@ def cmd_log(_):
         print("printer lifetime:", open(printlog.STATS).read().strip().splitlines()[-1])
 
 
+def cmd_level(a):
+    if running():
+        sys.exit("a print is running")
+    sys.path.insert(0, str(ROOT / "tools"))
+    import level
+    level.main(a.show)
+
+
 def cmd_cancel(_):
     STOP.touch()
     print("cancel requested; the sender will turn heaters off and park")
@@ -113,4 +122,6 @@ if __name__ == "__main__":
     s = sub.add_parser("print"); s.add_argument("gcode"); s.set_defaults(fn=cmd_print)
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
     sub.add_parser("log").set_defaults(fn=cmd_log)
+    s = sub.add_parser("level", help="probe the bed and show the map (--show: no probing)")
+    s.add_argument("--show", action="store_true"); s.set_defaults(fn=cmd_level)
     a = p.parse_args(); a.fn(a)

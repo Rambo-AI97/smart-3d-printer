@@ -8,6 +8,7 @@ p3d print jobs/<job>/<model>.gcode     # runs in the background (systemd user un
 p3d status                             # progress, temps
 p3d cancel                             # heaters off, lift, park
 p3d log                                # print history (data/, kept local)
+p3d level [--show]                     # probe the bed + colour map with what to adjust (--show = no movement)
 ```
 
 - `profiles/`: standalone Orca Slicer profiles built from Orca's stock V3 SE 0.4 presets (`python3 tools/flatten_profile.py`). Change settings here, not in the GUI.
