@@ -5,6 +5,7 @@ Run via `p3d print`, not directly.
 """
 import json, pathlib, subprocess, sys, time
 import serial
+import printlog
 
 ROOT = pathlib.Path(__file__).resolve().parent
 STATE, STOP = ROOT / "state.json", ROOT / "STOP"
@@ -102,10 +103,12 @@ def main(path):
         mins = round((time.time() - t0) / 60)
         save(file=name, status="done", progress=100, minutes=mins)
         notify("Print done", f"{name}: {mins} min", "white_check_mark")
+        printlog.log_job(path, "done", mins)
     except KeyboardInterrupt as stop:
         link.run(SAFE_STOP)
         save(file=name, status="cancelled", at_line=stop.args[0] if stop.args else None, of=total)
         notify("Print cancelled", name, "stop_sign")
+        printlog.log_job(path, "cancelled", round((time.time() - t0) / 60))
     except Exception as e:
         try:
             link.run(SAFE_STOP)
@@ -113,6 +116,7 @@ def main(path):
             pass
         save(file=name, status="failed", error=str(e))
         notify("Print FAILED", f"{name}: {e}", "warning")
+        printlog.log_job(path, "failed", round((time.time() - t0) / 60))
         raise
     finally:
         STOP.unlink(missing_ok=True)

@@ -5,6 +5,7 @@
   p3d slice MODEL [-q draft|standard|fine] [-f pla|petg] [--supports] [--brim]
   p3d print FILE.gcode               start in the background (survives this terminal)
   p3d cancel                         safe stop: heaters off, lift, park
+  p3d log                            print history
 """
 import argparse, json, pathlib, re, shlex, subprocess, sys, time
 
@@ -84,6 +85,17 @@ def cmd_print(a):
     print(f"started: {g.name}  (p3d status / p3d cancel)")
 
 
+def cmd_log(_):
+    import printlog
+    r = printlog.rows()
+    done = [x for x in r if x["status"] in ("done", "failed", "cancelled")]
+    print(f"{len(r)} jobs logged ({len(done)} printed through p3d)")
+    for x in r[-15:]:
+        print(f"{x['date'][:10]}  {x['status']:9} {x['name'][:34]:34} {x['grams'] or '-':>6} g  {x['actual_min'] or x['est_min'] or '-':>7} min")
+    if printlog.STATS.exists():
+        print("printer lifetime:", open(printlog.STATS).read().strip().splitlines()[-1])
+
+
 def cmd_cancel(_):
     STOP.touch()
     print("cancel requested; the sender will turn heaters off and park")
@@ -100,4 +112,5 @@ if __name__ == "__main__":
     s.set_defaults(fn=cmd_slice)
     s = sub.add_parser("print"); s.add_argument("gcode"); s.set_defaults(fn=cmd_print)
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
+    sub.add_parser("log").set_defaults(fn=cmd_log)
     a = p.parse_args(); a.fn(a)
