@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Wrapper: runs p3d.py with serial-port access (sg dialout until the next login).
+D="$(dirname "$(readlink -f "$0")")"
+if id -nG | grep -qw dialout; then exec python3 "$D/p3d.py" "$@"; fi
+exec sg dialout -c "python3 $(printf '%q ' "$D/p3d.py" "$@")"
