@@ -103,7 +103,7 @@ def cmd_level(a):
         sys.exit("a print is running")
     sys.path.insert(0, str(ROOT / "tools"))
     import level
-    level.main(a.show)
+    level.main(a.show, a.hot)
 
 
 def cmd_calib(a):
@@ -130,7 +130,9 @@ if __name__ == "__main__":
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
     sub.add_parser("log").set_defaults(fn=cmd_log)
     s = sub.add_parser("level", help="probe the bed and show the map (--show: no probing)")
-    s.add_argument("--show", action="store_true"); s.set_defaults(fn=cmd_level)
+    s.add_argument("--show", action="store_true")
+    s.add_argument("--hot", type=int, default=0, metavar="BED_C", help="heat the bed first (70 for PETG, 55 for PLA)")
+    s.set_defaults(fn=cmd_level)
     s = sub.add_parser("calib", help="generate a calibration print")
     s.add_argument("test", choices=["temp", "retraction", "flow", "firstlayer"])
     s.add_argument("-f", "--filament", default="petg", choices=["pla", "petg"]); s.set_defaults(fn=cmd_calib)

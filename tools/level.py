@@ -1,6 +1,7 @@
 """Measure the bed (G28 + G29), save the mesh (M500), show a colour map and what to adjust.
 
-Usage: p3d level            probe now (printer moves!)
+Usage: p3d level            probe now, cold (printer moves!)
+       p3d level --hot 70   heat the bed to 70 C, settle 5 min, then probe (best: matches printing)
        p3d level --show     just show the mesh already saved in the printer
 """
 import csv, pathlib, re, sys, time
@@ -86,15 +87,24 @@ def save(grid, span):
         w.writerow([time.strftime("%Y-%m-%d %H:%M"), round(span, 3), " | ".join(" ".join(f"{v:+.3f}" for v in r) for r in grid)])
 
 
-def main(show_only=False):
+def main(show_only=False, bed=0, soak_min=5):
     with serial.Serial(PORT, 115200, timeout=2, exclusive=True) as ser:
         time.sleep(3); ser.write(b"\n"); time.sleep(.5); ser.reset_input_buffer()
+        if not show_only and bed:
+            print(f"Heating bed to {bed} C and letting it settle {soak_min} min (a hot bed changes shape)...", flush=True)
+            talk(ser, f"M190 S{bed}", wait=900)
+            end = time.time() + soak_min * 60
+            while time.time() < end:
+                talk(ser, "M105")
+                time.sleep(20)
         if not show_only:
-            print("Homing and probing (about 2 minutes)...")
+            print("Homing and probing (about 2 minutes)...", flush=True)
             talk(ser, "G28")
             talk(ser, "G29", wait=600)
             talk(ser, "M500")  # keep the new mesh after power-off
             talk(ser, "G1 Z10 F600")
+            if bed:
+                talk(ser, "M140 S0")
         grid = parse_grid(talk(ser, "M420 V"))
     if not grid:
         sys.exit("No mesh found in the printer.")
@@ -104,4 +114,5 @@ def main(show_only=False):
 
 
 if __name__ == "__main__":
-    main("--show" in sys.argv)
+    a = sys.argv[1:]
+    main("--show" in a, int(a[a.index("--hot") + 1]) if "--hot" in a else 0)
