@@ -1,7 +1,7 @@
 """PID-tune the hotend and bed, save to EEPROM. Usage: p3d pid [--hotend 220] [--bed 60]"""
 import re, sys, time
-import serial
-from level import PORT, talk
+from . import config
+from .level import talk
 
 
 def tune(ser, heater, temp):
@@ -16,7 +16,7 @@ def tune(ser, heater, temp):
 
 
 def main(hotend=220, bed=60):
-    with serial.Serial(PORT, 115200, timeout=2, exclusive=True) as ser:
+    with config.open_serial(timeout=2) as ser:
         time.sleep(3); ser.write(b"\n"); time.sleep(.5); ser.reset_input_buffer()
         try:
             talk(ser, "M106 S255")  # part fan on, like during a print

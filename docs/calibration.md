@@ -1,7 +1,8 @@
 # Calibration record: Ender-3 V3 SE + PETG
 
 Everything we tuned, what each test is for, and where the value lives.
-Source of truth: `tools/flatten_profile.py` (`CALIBRATED`) → `profiles/*.json` (CLI) and the Orca GUI preset **PETG (Axiom)**.
+Source of truth: `src/p3d/flatten_profile.py` (`CALIBRATED`) → `src/p3d/profiles/*.json` (CLI) and the Orca GUI preset **PETG (p3d)** (`p3d profiles`).
+Copy the Results table to `<data>/calibration.md` to show it on the dashboard.
 Printer-side values are in the printer's EEPROM (`M503` shows them).
 
 ## Results

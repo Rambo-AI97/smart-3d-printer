@@ -1,9 +1,18 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+# runtime files (now in ~/.local/share/p3d and ~/.local/state/p3d; kept for old checkouts)
 jobs/
 state.json
 STOP
-__pycache__/
 data/
+# private models stay local: only models/scad/*.scad sources are shared
 models/*/
 !models/scad/
 models/scad/*.stl
 models/scad/*.png
+.privacy-blocklist

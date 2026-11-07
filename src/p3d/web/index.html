@@ -87,7 +87,7 @@ function parseTemps(s){const r={},t=(s||'').match(/T:\s*([\d.]+)\s*\/\s*([\d.]+)
   if(t){r.nozzle=+t[1];r.nozzle_target=+t[2]}if(b){r.bed=+b[1];r.bed_target=+b[2]}return r}
 function parseStarted(s){if(!s)return null;const d=new Date(s.replace(' ','T'));return isNaN(d)?new Date(s):d}
 function render(s){
-  const st=s.status||'idle';$('badge').textContent=st;$('badge').className='badge '+st;
+  const st=s.stale?'stale (sender stopped)':(s.status||'idle');$('badge').textContent=st;$('badge').className='badge '+st;
   $('name').textContent=s.file||'No active job';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
   const pct=num(s.progress);$('pct').textContent=pct===null?D:Math.round(pct)+'%';
   $('arc').setAttribute('stroke-dashoffset',326.7*(1-(pct||0)/100));

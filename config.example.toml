@@ -1,0 +1,27 @@
+# p3d config: copy to ~/.config/p3d/config.toml (or run `p3d setup`, which writes it for you).
+# Every key is optional; empty or missing = auto-detect / default.
+
+# Printer USB port. Empty = the first /dev/serial/by-id/* device.
+port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
+baud = 115200
+
+# Tools. Empty = search PATH, ~/orca-slicer, ~/Applications/*OrcaSlicer*.AppImage.
+orca_slicer = ""
+openscad = ""
+
+# Where things go. data_dir default ~/.local/share/p3d (env P3D_DATA overrides).
+data_dir = ""        # print_log.csv, prints/, printer_stats.csv, bed_mesh_log.csv, calibration.md
+jobs_dir = ""        # sliced jobs (G-code, previews); default <data_dir>/jobs
+publish_dir = ""     # p3d pack output; default <data_dir>/publish
+models_dir = ""      # your parts (models/scad/NAME.scad); default ./models or <data_dir>/models
+
+# Phone alerts via ntfy (https://ntfy.sh or your own server). Empty = off.
+ntfy_url = ""        # e.g. "https://ntfy.sh/pick-a-long-random-topic"
+ntfy_token = ""      # only for a protected topic
+
+# Dashboard
+web_port = 8765
+web_host = "0.0.0.0" # "127.0.0.1" = this PC only
+
+# Printer geometry used by cancel (park the head at the back so the part is reachable)
+park_y = 220

@@ -1,38 +1,76 @@
-# smart-3d-printer
+# smart-3d-printer (`p3d`)
 
-Slice and print on a Creality Ender-3 V3 SE (stock Marlin, USB) from the command line, so an AI assistant can run the printer.
+Run a USB-connected 3D printer from the command line: slice a model, print it in the background,
+watch it on a live phone-friendly dashboard, and keep a log of every print (time, filament, temperatures, your rating).
+Simple enough for an AI assistant to drive safely. Tested on a Creality **Ender-3 V3 SE** with stock Marlin firmware.
 
-```
-p3d slice MODEL.stl [-q draft|standard|fine] [-f pla|petg] [--supports] [--brim]
-p3d print jobs/<job>/<model>.gcode     # runs in the background (systemd user unit p3d-print)
-p3d status                             # progress, temps
-p3d cancel                             # heaters off, lift, park
-p3d log                                # print history (logs live in ~/.local/share/p3d)
-p3d rate [1-5] [--issues stringing,adhesion] [--note "text"] [--job NAME]   # rate the last print (no args: show it)
-p3d history                            # totals, success rate, hours, grams, avg rating, last 5
-p3d level [--show]                     # probe the bed + colour map with what to adjust (--show = no movement)
-```
+![Live dashboard](docs/dashboard.png)
 
-- Live dashboard: `p3d web [--open]` -> http://localhost:8765 (phone: `http://<this-pc-tailscale-ip>:8765`; `p3d web` prints it). Read-only page with model preview, progress, time left, ETA, layer/Z, nozzle/bed temps chart, recent prints. Runs as systemd user service `p3d-web` (`web/server.py`, stdlib only). `sender.py` writes `state.json` every 5 s (M73 progress, Z, layers, M155 temps); `preview.py` renders `preview.png` per job with OpenSCAD.
-- `profiles/`: standalone Orca Slicer profiles built from Orca's stock V3 SE 0.4 presets (`python3 tools/flatten_profile.py`). Change settings here, not in the GUI.
-- `sender.py`: streams G-code with line numbers and checksums, waits for each `ok`, resends lines Marlin asks for, and sends ntfy alerts.
-- `printlog.py`: job log `~/.local/share/p3d/print_log.csv` (family hub, syncs to the home server) (each p3d job + past G-code found on this PC) and lifetime counters from the printer (`printlog.py stats`).
-- `tools/calib.py` (`p3d calib`; OpenSCAD model -> Orca slice -> G-code post-process, firmware has no Linear Advance):
-  - `temp`: 8-block tower, PLA 230->195 / PETG 255->220 in -5 C steps (bottom = hottest), number engraved on the front, bridge + 45 deg overhang per block; ~1 h 15 min.
-  - `retraction`: two pillars 40 mm apart, 5 mm bands with retraction 0.2 -> 1.6 mm (bottom to top); read stringing per band; ~25 min.
-  - `flow`: five 25x25x2 squares at 90/95/100/105/110 % (`M221`), pick the smoothest top; ~22 min.
-  - `firstlayer`: one 0.2 mm layer, 5 squares (centre + 4 corners) to judge squish and tilt; ~4 min.
-- `tools/probe.py`: read-only check of firmware, settings and temps.
-- Legacy (2024, unsafe, don't use): `printer_comm.py`, `printer_test.py`, `log_print_data.py`, `ml_model.py`.
+## Quick start
 
-## Data we record
-All in `~/.local/share/p3d/` (override `P3D_DATA`); new columns are appended at the end, old rows keep empty cells.
-- `print_log.csv` (one row per job): date, name, status, est_min, actual_min, grams, filament, layer_mm, nozzle_mm, source, file; then started, ended, nozzle_set, bed_set, flow_ratio, retraction_mm, quality (draft/standard/fine/calib), outer_speed (outer wall mm/s), max_nozzle, min_nozzle (lowest after layer 1 while heating: temp dips), avg_bed, layers, samples_file, rating (1-5), issues (tags), notes, model (source STL). Slicer settings come from the G-code header comments; rating/issues/notes are set with `p3d rate`.
-- `prints/<YYYYMMDD-HHMM>-<name>.csv` (one per print, row every 30 s + end): time, elapsed_min, progress, remaining_min, z, layer, nozzle, nozzle_target, bed, bed_target.
-- `printer_stats.csv`: date, prints, finished, failed, total_hours, longest_hours, filament_m (M78 lifetime counters, appended after every print and by `printlog.py stats`).
-- `bed_mesh_log.csv`: date, span_mm, grid_rows_front_to_back (every `p3d level`; 0.30 good, 0.60 usable).
-- Dashboard "History" tab charts all of it (`/api/history`, `/api/print/<file>`); the Calibration card is read from `CALIBRATION.md`.
+You need Linux, Python 3.11+, [pipx](https://pipx.pypa.io), [Orca Slicer](https://github.com/SoftFever/OrcaSlicer/releases)
+(the AppImage is fine) and, optionally, [OpenSCAD](https://openscad.org) for parts and previews.
 
-## Safety rules for the assistant
-1. Never start a print without a human saying "print it" AND confirming the bed is clear.
-2. The first print with new settings or a new filament is watched by a human.
+1. **Install:** `pipx install git+https://github.com/Rambo-AI97/smart-3d-printer`
+2. **Set up:** plug in the printer, switch it on, run `p3d setup` (finds the port and the slicer, asks for optional phone alerts).
+3. **Check:** `p3d install-service`, then `p3d doctor`. Fix any ✗ line it shows (it tells you how).
+4. **Slice:** `p3d slice my-part.stl` → prints the G-code path, time and grams.
+5. **Print:** clear the bed, then `p3d print <that .gcode>`. Watch with `p3d web --open` or `p3d status`.
+
+After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log learns what works.
+
+## Commands
+
+| Group | Command | What it does |
+|---|---|---|
+| Print | `p3d status [--json]` | current job, progress, temperatures |
+| | `p3d print FILE.gcode` | print in the background (survives closing the terminal) |
+| | `p3d cancel` | safe stop: heaters off, lift, park |
+| | `p3d wait layer\|done` | block until the first layer is down / the job ends (for scripts) |
+| | `p3d web [--open]` | live dashboard URL (also for your phone) |
+| Design | `p3d slice MODEL [-q draft\|standard\|fine] [-f pla\|petg] [--supports] [--brim]` | model → G-code |
+| | `p3d scad NAME` | OpenSCAD part → STL + preview |
+| | `p3d inspect FILE.gcode` | where the time and filament go |
+| | `p3d pack NAME` | upload pack for Printables (STL, source, render) |
+| Calibrate | `p3d level [--hot 70]` | probe the bed, colour map, what to adjust |
+| | `p3d calib temp\|retraction\|flow\|firstlayer` | make a calibration print |
+| | `p3d pid` / `p3d probe` | PID-tune heaters / read-only firmware check |
+| Data | `p3d log`, `p3d history`, `p3d rate` | job log, totals, ratings |
+| Setup | `p3d setup`, `p3d doctor`, `p3d install-service` | first run, health check, background services |
+
+`p3d --help` lists everything; `p3d <command> -h` explains one command.
+
+## Works with
+
+- **Ender-3 V3 SE (stock Marlin, USB):** tested daily. Bundled Orca profiles are tuned for it (0.4 mm nozzle, PLA and PETG).
+- **Other Marlin printers over USB:** the sender speaks plain Marlin (line numbers, checksums, resend), so it should work.
+  Change three things: the slicer profiles (`p3d profiles` after editing the preset names in
+  `src/p3d/flatten_profile.py`, or drop your own Orca CLI profiles in `~/.config/p3d/profiles/`),
+  `park_y` in the config (your bed depth), and check `p3d probe` answers. Run your first print watched.
+- **Klipper:** not supported. Klipper printers are driven through Moonraker, not a raw serial port;
+  use Mainsail/Fluidd there. (On the V3 SE, Klipper also disables the stock screen and the auto Z-offset.)
+
+## Safety rules
+
+1. Never start a print unless a person said "print it" **and** confirmed the bed is clear.
+2. Watch the first layer of every print with new settings or a new filament.
+3. Don't leave a printer unattended without a way to cut power. `p3d cancel` stops heaters and motion,
+   but it can't fix a part that came loose: switch the printer off.
+4. The dashboard is read-only on purpose. Keep it on your home network or a VPN, never on the open internet.
+
+## Models
+
+Parts designed and printed with this tool (OpenSCAD sources in `models/scad/`), CC BY-SA 4.0:
+
+- [Monitor stand](https://www.printables.com/model/1905054)
+- [Stroller cup holder](https://www.printables.com/model/1905061)
+
+## More
+
+- [Data recorded](docs/data.md): log columns, per-print samples, where files live
+- [Calibration](docs/calibration.md): which tests, in which order, and the values found
+- [Game models](docs/game-models.md): turning a Godot/Blender model into a printable STL
+- Development: `pip install -e ".[dev]"`, `pytest`, `ruff check .`; enable the privacy hook once with
+  `git config core.hooksPath .githooks`
+
+MIT licence.

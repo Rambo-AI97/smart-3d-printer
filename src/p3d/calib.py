@@ -1,13 +1,11 @@
 """Calibration prints: p3d calib temp|retraction|flow|firstlayer [-f pla|petg]
 
 Each test = OpenSCAD model -> Orca slice (profiles + small overrides) -> G-code post-process.
-Output: jobs/<stamp>-calib-<test>/calib-<test>.gcode (never sent to the printer from here).
+Output: <jobs_dir>/<stamp>-calib-<test>/calib-<test>.gcode (never sent to the printer from here).
 """
-import json, pathlib, re, subprocess, sys, time
+import json, re, subprocess, sys, time
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-ORCA = pathlib.Path.home() / "orca-slicer"
-OPENSCAD = pathlib.Path.home() / ".local/bin/openscad"
+from . import config
 FONT = "DejaVu Sans:style=Bold"
 BED = 220
 BASE_RETRACT = 1.2  # mm, profiles/machine.json retraction_length
@@ -149,21 +147,23 @@ def run(test, fil):
     else:
         sys.exit("tests: temp retraction flow firstlayer")
 
-    out = ROOT / "jobs" / (f"{time.strftime('%Y%m%d-%H%M')}-calib-{test}" + ("" if pla else "-petg"))
+    c = config.get()
+    prof = c.profiles
+    out = c.jobs / (f"{time.strftime('%Y%m%d-%H%M')}-calib-{test}" + ("" if pla else "-petg"))
     out.mkdir(parents=True, exist_ok=True)
     (out / f"calib-{test}.scad").write_text(scad + "\n")
     stl = out / f"calib-{test}.stl"
-    subprocess.run([str(OPENSCAD), "-o", str(stl), str(out / f"calib-{test}.scad")],
+    subprocess.run([c.scad, "-o", str(stl), str(out / f"calib-{test}.scad")],
                    check=True, capture_output=True)
     pj, fj = out / "process.json", out / "filament.json"
-    p = json.load(open(ROOT / "profiles/process-standard.json")); p.update(proc)
+    p = json.load(open(prof / "process-standard.json")); p.update(proc)
     if test != "firstlayer":
         p.update(brim)
-    f = json.load(open(ROOT / f"profiles/filament-{fil}.json")); f.update(filament)
+    f = json.load(open(prof / f"filament-{fil}.json")); f.update(filament)
     pj.write_text(json.dumps(p)); fj.write_text(json.dumps(f))
     gdir = out / "slice"
-    subprocess.run([str(ORCA), "--slice", "0", "--arrange", "0",  # keep the model's own X/Y
-                    "--load-settings", f"{ROOT}/profiles/machine.json;{pj}",
+    subprocess.run([c.orca, "--slice", "0", "--arrange", "0",  # keep the model's own X/Y
+                    "--load-settings", f"{prof}/machine.json;{pj}",
                     "--load-filaments", str(fj), "--outputdir", str(gdir), str(stl)],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     g = next(gdir.glob("*.gcode"), None)

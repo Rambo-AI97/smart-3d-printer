@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Privacy scan (IPs, home paths, names, secrets)
+        run: python scripts/privacy_scan.py
+      - name: Install
+        run: pip install ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Tests (fake serial printer)
+        run: pytest -q
+      - name: CLI smoke test
+        run: |
+          p3d --help
+          p3d doctor || true

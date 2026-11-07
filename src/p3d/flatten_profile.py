@@ -1,12 +1,15 @@
-"""Build standalone Orca profiles (profiles/*.json) for the Ender-3 V3 SE 0.4 from Orca's system presets.
+"""Build standalone Orca profiles for the Ender-3 V3 SE 0.4 from Orca's system presets: `p3d profiles`.
 
 Orca's CLI ignores 'inherits', so each preset is merged with its parents into one file.
-Run again after an Orca update: python3 tools/flatten_profile.py
+Writes ~/.config/p3d/profiles/ (used instead of the bundled ones). Run again after an Orca update.
+Other printer: change MACHINE/PROCESSES/FILAMENTS below to the preset names Orca shows for it.
 """
 import json, pathlib
 
+from . import config
+
 SYS = pathlib.Path.home() / ".config/OrcaSlicer/system"
-OUT = pathlib.Path(__file__).resolve().parent.parent / "profiles"
+OUT = config.CONFIG_DIR / "profiles"
 
 MACHINE = "Creality Ender-3 V3 SE 0.4 nozzle"
 PROCESSES = {
@@ -74,10 +77,10 @@ def fix_machine(d):
 
 
 def write_gui_filament(key, name):
-    """Same calibrated values as an Orca GUI user preset '<KEY> (Axiom)', so GUI and CLI slice alike."""
+    """Same calibrated values as an Orca GUI user preset '<KEY> (p3d)', so GUI and CLI slice alike."""
     gui = pathlib.Path.home() / ".config/OrcaSlicer/user/default/filament"
     gui.mkdir(parents=True, exist_ok=True)
-    title = f"{key.upper()} (Axiom)"
+    title = f"{key.upper()} (p3d)"
     d = {"inherits": name, "name": title, "from": "User", "filament_settings_id": [title],
          **CALIBRATED[key]}
     json.dump(d, open(gui / f"{title}.json", "w"), indent=4)
@@ -86,8 +89,8 @@ def write_gui_filament(key, name):
     print(f"GUI preset: {title}")
 
 
-if __name__ == "__main__":
-    OUT.mkdir(exist_ok=True)
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
     write("machine", MACHINE, "machine.json", fix_machine)
     for key, name in PROCESSES.items():
         write("process", name, f"process-{key}.json", lambda d: d.update(print_settings_id=d["name"], **PROCESS_TUNED))
@@ -97,3 +100,8 @@ if __name__ == "__main__":
     for key, name in FILAMENTS.items():
         if key in CALIBRATED:
             write_gui_filament(key, name)
+    print(f"profiles written to {OUT}")
+
+
+if __name__ == "__main__":
+    main()

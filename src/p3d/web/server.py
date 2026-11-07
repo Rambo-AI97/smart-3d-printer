@@ -1,18 +1,18 @@
-"""Read-only print dashboard: python3 web/server.py [port]  (stdlib only, no control endpoints)."""
-import csv, json, os, pathlib, sys, time
+"""Read-only print dashboard: `p3d web` (service p3d-web). Stdlib only, no control endpoints."""
+import csv, json, pathlib, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-STATE = pathlib.Path(os.environ.get("P3D_STATE", ROOT / "state.json"))
-DATA = pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d"))
+from .. import config, printlog
+
 PAGE = pathlib.Path(__file__).resolve().parent / "index.html"
+DATA = config.get().data
 
 
 def read_state():
-    try:
-        return json.loads(STATE.read_text())
-    except Exception:
-        return {"status": "idle"}
+    s = config.read_state()
+    if s.get("status") == "printing" and not config.print_running():
+        s["stale"] = True  # sender died without a final state
+    return s
 
 
 def job_dir(s):
@@ -21,7 +21,7 @@ def job_dir(s):
         return pathlib.Path(d)
     f = s.get("file")
     if f:
-        hits = sorted((ROOT / "jobs").glob(f"*/{f}.gcode"))
+        hits = sorted(config.get().jobs.glob(f"*/{f}.gcode"))
         if hits:
             return hits[-1].parent
     return None
@@ -50,10 +50,10 @@ def read_csv(name):
 
 
 def calibration():
-    """Rows of the results table in CALIBRATION.md (simplest robust source)."""
+    """Rows of the results table in <data_dir>/calibration.md (see docs/calibration.md)."""
     out = []
     try:
-        for line in (ROOT / "CALIBRATION.md").read_text().splitlines():
+        for line in (DATA / "calibration.md").read_text().splitlines():
             c = [x.strip().replace("**", "") for x in line.strip().strip("|").split("|")]
             if line.startswith("|") and len(c) >= 3 and c[0][:2] == "20":
                 out.append({"date": c[0], "what": c[1], "value": c[2], "where": c[3] if len(c) > 3 else ""})
@@ -108,8 +108,6 @@ class H(BaseHTTPRequestHandler):
             if s.get("est_total_min") is None and s.get("status") == "printing":  # old sender: read the gcode header
                 try:
                     d = job_dir(s)
-                    sys.path.insert(0, str(ROOT))
-                    import printlog
                     s["est_total_min"] = printlog.gcode_info(d / f"{s['file']}.gcode")["est_min"] or None
                 except Exception:
                     pass
@@ -143,6 +141,10 @@ class H(BaseHTTPRequestHandler):
         pass
 
 
+def main(port=None, host=None):
+    c = config.get()
+    ThreadingHTTPServer((host or c.web_host, int(port or c.web_port)), H).serve_forever()
+
+
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    ThreadingHTTPServer(("0.0.0.0", port), H).serve_forever()
+    main(sys.argv[1] if len(sys.argv) > 1 else None)

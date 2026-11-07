@@ -1,24 +1,28 @@
 """Stream a G-code file to Marlin safely: line numbers + checksums, wait for 'ok', honour Resend.
 
 Writes progress to state.json, stops cleanly when the STOP file appears, pings ntfy when done/failed.
-Run via `p3d print`, not directly.
+Every job ends with a final state: status done/failed/cancelled + ended_at (status/wait read it).
+Run by the p3d-print service (`p3d print`), not directly.
 """
-import csv, json, os, pathlib, re, subprocess, sys, time
-import serial
-import printlog
+import csv, pathlib, re, sys, time
 
-ROOT = pathlib.Path(__file__).resolve().parent
-STATE, STOP = pathlib.Path(os.environ.get("P3D_STATE", ROOT / "state.json")), ROOT / "STOP"
-PORT = os.environ.get("P3D_PORT", "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0")
-NOTIFY = pathlib.Path.home() / ".local/bin/p3d-notify"
+from . import config, printlog
+from .config import notify
+
 SILENCE_LIMIT = 300  # s with no reply at all → assume the link is dead
-SAFE_STOP = ["M104 S0", "M140 S0", "M107", "G91", "G1 Z10 F600", "G90", "G1 X0 Y220 F3000", "M84"]
+STOP = None  # set in main()/Link from config (a path; tests may override)
 
 
-def notify(title, msg, tags="printer"):
-    if os.environ.get("P3D_NO_NOTIFY"):
-        return
-    subprocess.run([str(NOTIFY), title, msg, tags], check=False)
+def safe_stop():
+    return ["M104 S0", "M140 S0", "M107", "G91", "G1 Z10 F600", "G90", f"G1 X0 Y{config.get().park_y} F3000", "M84"]
+
+
+def stop_file():
+    return STOP or config.get().stop
+
+
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%S")
 
 
 def header_info(path):
@@ -67,7 +71,7 @@ def framed(n, cmd):
 
 class Link:
     def __init__(self):
-        self.ser = serial.Serial(PORT, 115200, timeout=1, exclusive=True)
+        self.ser = config.open_serial(timeout=1)
         time.sleep(3)  # board resets on connect
         self.ser.write(b"\n")
         time.sleep(0.5)
@@ -83,7 +87,7 @@ class Link:
         nxt, last = n + 1, time.time()
         while True:
             line = self.ser.readline().decode(errors="replace").strip()
-            if STOP.exists() and cmd.startswith(("M109", "M190")) and not getattr(self, "broke", False):
+            if stop_file().exists() and cmd.startswith(("M109", "M190")) and not getattr(self, "broke", False):
                 self.ser.write(b"M108\n")  # emergency parser: break out of the heat-up wait
                 self.broke = True
             if not line:
@@ -110,7 +114,7 @@ class Link:
         self.exchange(0, "M110 N0")
         n = 1
         while n <= len(cmds):
-            if check_stop and STOP.exists():
+            if check_stop and stop_file().exists():
                 raise KeyboardInterrupt(n)
             n = self.exchange(n, cmds[n - 1])
             if on_progress:
@@ -141,32 +145,37 @@ def cooldown(link, limit_min=60):
 
 
 def save(**kw):
-    tmp = STATE.with_name(STATE.name + ".tmp")
-    tmp.write_text(json.dumps(kw, indent=1))
-    os.replace(tmp, STATE)
+    config.write_state(**kw)
 
 
 def main_cooldown():
     """Standalone: `p3d cooldown` (waits for a running print to end first)."""
-    while subprocess.run(["systemctl", "--user", "is-active", "-q", "p3d-print"]).returncode == 0:
+    while config.print_running():
         time.sleep(30)
     cooldown(Link())
 
 
 def main(path):
+    path = str(pathlib.Path(path).resolve())
     name = pathlib.Path(path).stem
+    job_id = pathlib.Path(path).parent.name
     lines = ["M155 S5"] + load(path) + ["M155 S0"]  # Marlin auto-reports temps during the print
     total, t0 = len(lines), time.time()
     layers = header_info(path)
     info = printlog.gcode_info(path)
     est = info.get("est_min") or None
     job = {"est_total_min": est, "grams": info.get("grams") or None, "filament": info.get("filament") or None,
-           "job_dir": str(pathlib.Path(path).resolve().parent), "total_layers": layers}
+           "job_dir": str(pathlib.Path(path).parent), "total_layers": layers, "job_id": job_id}
     started = time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(t0))
-    link = Link()
+    try:
+        link = Link()
+    except Exception as e:
+        save(file=name, status="failed", error=f"cannot open printer: {e}", started=started, ended_at=now_iso(), **job)
+        notify("Print FAILED", f"{name}: cannot open printer: {e}", "warning")
+        raise
     cur = {"z": None, "layer": None, "pct": None, "rem": None, "last": 0.0, "z_seen": set()}
     stamp = time.strftime("%Y%m%d-%H%M", time.localtime(t0))
-    samples = printlog.DATA / "prints" / f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]+', '_', name)}.csv"
+    samples = printlog.data_dir() / "prints" / f"{stamp}-{re.sub(r'[^A-Za-z0-9._-]+', '_', name)}.csv"
     sm = {"last": 0.0, "ok": True, "max_n": None, "min_n": None, "bed_sum": 0.0, "bed_n": 0}
     COLS = ["time", "elapsed_min", "progress", "remaining_min", "z", "layer", "nozzle", "nozzle_target", "bed", "bed_target"]
 
@@ -273,10 +282,15 @@ def main(path):
     link.on_temp = lambda: write(i=cur.get("i", 0))  # write() rate-limits itself to every 5 s
     notify("Print started", name, "printer")
 
+    def final(status, **kw):
+        link.on_temp = None  # temp replies during cooldown must not overwrite the final state with "printing"
+        save(file=name, status=status, started=started, ended_at=now_iso(),
+             minutes=round((time.time() - t0) / 60), z=cur["z"], layer=cur["layer"], **kw, **job)
+
     try:
         link.run(lines, check_stop=True, on_progress=progress)
         mins = round((time.time() - t0) / 60)
-        save(file=name, status="done", progress=100, minutes=mins, **job)
+        final("done", progress=100)
         notify("Print done", f"{name}: {mins} min. Rate it: p3d rate 1-5", "white_check_mark")
         finish("done", mins)
         try:
@@ -284,23 +298,38 @@ def main(path):
         except Exception:
             pass
     except KeyboardInterrupt as stop:
-        link.run(SAFE_STOP)
-        save(file=name, status="cancelled", at_line=stop.args[0] if stop.args else None, of=total, **job)
+        link.run(safe_stop())
+        final("cancelled", at_line=stop.args[0] if stop.args else None, of=total, progress=metrics(cur.get("i", 0))[1])
         notify("Print cancelled", name, "stop_sign")
         finish("cancelled", round((time.time() - t0) / 60))
     except Exception as e:
         try:
-            link.run(SAFE_STOP)
+            link.run(safe_stop())
         except Exception:
             pass
-        save(file=name, status="failed", error=str(e), **job)
+        final("failed", error=str(e), progress=metrics(cur.get("i", 0))[1])
         notify("Print FAILED", f"{name}: {e}", "warning")
         finish("failed", round((time.time() - t0) / 60))
         raise
     finally:
-        STOP.unlink(missing_ok=True)
+        stop_file().unlink(missing_ok=True)
         link.ser.close()
 
 
+def cli(argv=None):
+    """python -m p3d.sender FILE.gcode | --queued (path from the queue file) | --cooldown"""
+    argv = sys.argv[1:] if argv is None else argv
+    if not argv:
+        sys.exit(cli.__doc__)
+    if argv[0] == "--cooldown":
+        return main_cooldown()
+    if argv[0] == "--queued":
+        q = config.get().queue
+        path = q.read_text().strip()
+        q.unlink(missing_ok=True)
+        return main(path)
+    return main(argv[0])
+
+
 if __name__ == "__main__":
-    main_cooldown() if sys.argv[1] == "--cooldown" else main(sys.argv[1])
+    cli()

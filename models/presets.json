@@ -1,9 +1,0 @@
-{
-  "_doc": "p3d game NAME: export a code-built game model and make a print-ready STL. Fields: game (Godot project dir), script, args (constructor args), hide (properties to hide), drop_thin (skip rope-thin meshes, model units), length mm, flat (base cut, fraction of height), thicken/voxel optional.",
-  "faering": {"game": "~/projects/Pirate Game/game", "script": "res://scripts/ship_model.gd", "args": ["faering"],
-              "hide": "oars,flag,telltales", "drop_thin": 0.05, "length": 85, "flat": 0.07,
-              "note": "Pirate Game school boat. 85 mm: 1h31, 12 g PETG, --supports --brim. v1 2026-11-06: strings + grid supports buried it; v2 flat 0.07 + tree supports."},
-  "knarr":   {"game": "~/projects/Pirate Game/game", "script": "res://scripts/ship_model.gd", "args": ["knarr"],
-              "hide": "oars,flag,telltales", "length": 120, "flat": 0.04,
-              "note": "Pirate Game cargo ship (dragon prow, shields). Untested; small details need >=120 mm."}
-}

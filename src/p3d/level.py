@@ -4,11 +4,9 @@ Usage: p3d level            probe now, cold (printer moves!)
        p3d level --hot 70   heat the bed to 70 C, settle 5 min, then probe (best: matches printing)
        p3d level --show     just show the mesh already saved in the printer
 """
-import csv, os, pathlib, re, sys, time
-import serial
+import csv, re, sys, time
 
-PORT = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
-DATA = pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d"))
+from . import config
 GOOD, OK = 0.30, 0.60  # mm span: good / usable
 
 
@@ -77,7 +75,8 @@ def report(grid):
 
 
 def save(grid, span):
-    DATA.mkdir(exist_ok=True)
+    DATA = config.get().data
+    DATA.mkdir(parents=True, exist_ok=True)
     p = DATA / "bed_mesh_log.csv"
     new = not p.exists()
     with open(p, "a", newline="") as f:
@@ -88,7 +87,7 @@ def save(grid, span):
 
 
 def main(show_only=False, bed=0, soak_min=5):
-    with serial.Serial(PORT, 115200, timeout=2, exclusive=True) as ser:
+    with config.open_serial(timeout=2) as ser:
         time.sleep(3); ser.write(b"\n"); time.sleep(.5); ser.reset_input_buffer()
         if not show_only and bed:
             print(f"Heating bed to {bed} C and letting it settle {soak_min} min (a hot bed changes shape)...", flush=True)

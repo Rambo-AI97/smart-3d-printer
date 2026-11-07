@@ -1,27 +1,23 @@
 """Render a PNG of a model with OpenSCAD for the dashboard: preview.make(stl, out_png)."""
-import json, os, pathlib, subprocess, tempfile
+import json, pathlib, shutil, subprocess, tempfile
 
-OPENSCAD = pathlib.Path.home() / ".local/bin/openscad"
+from . import config
 
 
 def make(stl, out_png):
     stl, out_png = pathlib.Path(stl).resolve(), pathlib.Path(out_png).resolve()
-    if not stl.exists() or not OPENSCAD.exists():
+    scad_bin = config.get().scad
+    if not stl.exists() or not scad_bin:
         return False
     with tempfile.TemporaryDirectory() as d:
         scad = pathlib.Path(d) / "p.scad"
         scad.write_text(f'import("{stl}");\n')
-        cmd = [str(OPENSCAD), "-o", str(out_png), "--imgsize=400,400", "--viewall", "--autocenter",
+        cmd = [scad_bin, "-o", str(out_png), "--imgsize=400,400", "--viewall", "--autocenter",
                "--colorscheme=Tomorrow Night", str(scad)]
         r = subprocess.run(cmd, capture_output=True, timeout=120)
         if r.returncode != 0 or not out_png.exists():
-            r = subprocess.run(["xvfb-run", "-a", *cmd], capture_output=True, timeout=120) if shutil_which("xvfb-run") else r
+            r = subprocess.run(["xvfb-run", "-a", *cmd], capture_output=True, timeout=120) if shutil.which("xvfb-run") else r
     return out_png.exists()
-
-
-def shutil_which(x):
-    import shutil
-    return shutil.which(x)
 
 
 def for_job(job_dir):

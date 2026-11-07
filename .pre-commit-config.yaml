@@ -1,0 +1,14 @@
+# Optional: `pre-commit install`. Without pre-commit: `git config core.hooksPath .githooks` (same scan).
+repos:
+  - repo: local
+    hooks:
+      - id: privacy-scan
+        name: privacy scan (IPs, home paths, names, secrets)
+        entry: python3 scripts/privacy_scan.py
+        language: system
+        pass_filenames: false
+      - id: ruff
+        name: ruff
+        entry: ruff check
+        language: system
+        types: [python]

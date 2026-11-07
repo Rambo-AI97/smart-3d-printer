@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "p3d"
+dynamic = ["version"]
+description = "Slice, print and track a Marlin 3D printer (Ender-3 V3 SE tested) from the command line, with a live dashboard."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11"
+dependencies = ["pyserial>=3.5"]
+keywords = ["3d-printing", "marlin", "orca-slicer", "openscad", "ender-3"]
+classifiers = ["Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Printing"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.5"]
+
+[project.scripts]
+p3d = "p3d.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Rambo-AI97/smart-3d-printer"
+
+[tool.setuptools.dynamic]
+version = { attr = "p3d.__version__" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+p3d = ["profiles/*.json", "web/index.html", "model/*.py", "model/*.gd"]
+
+[tool.ruff]
+line-length = 140
+target-version = "py311"
+extend-exclude = ["src/p3d/model/to_stl.py"]  # runs inside Blender (bpy)
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B"]
+ignore = ["E401", "E701", "E702", "E731", "E741", "B007", "B008", "B023", "B904"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

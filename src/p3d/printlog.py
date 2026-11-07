@@ -1,15 +1,23 @@
-"""Print log: data/print_log.csv (one row per job) + data/printer_stats.csv (lifetime counters).
+"""Print log: <data_dir>/print_log.csv (one row per job) + printer_stats.csv (lifetime counters).
 
-  python3 printlog.py import      add past G-code files found on this PC (sliced jobs)
-  python3 printlog.py stats       snapshot the printer's lifetime counters (M78)
+  p3d import-history   add past G-code files found on this PC (sliced jobs)
+  p3d stats            snapshot the printer's lifetime counters (M78)
 """
 import csv, datetime, json, os, pathlib, re, sys, time
 
-ROOT = pathlib.Path(__file__).resolve().parent
-# Logs live in the family hub (Syncthing → Rambo). Override with P3D_DATA.
-DATA = pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d"))
-LOG = DATA / "print_log.csv"
-STATS = DATA / "printer_stats.csv"
+from . import config
+
+
+def data_dir():
+    return config.get().data
+
+
+def log_file():
+    return data_dir() / "print_log.csv"
+
+
+def stats_file():
+    return data_dir() / "printer_stats.csv"
 FIELDS = ["date", "name", "status", "est_min", "actual_min", "grams", "filament", "layer_mm", "nozzle_mm", "source", "file",
           # added 2026-11-06 (older rows leave these empty)
           "started", "ended", "nozzle_set", "bed_set", "flow_ratio", "retraction_mm", "quality", "outer_speed",
@@ -49,38 +57,38 @@ def gcode_info(path):
 
 
 def rows():
-    if not LOG.exists():
+    if not log_file().exists():
         return []
-    return list(csv.DictReader(open(LOG)))
+    return list(csv.DictReader(open(log_file())))
 
 
 def migrate():
     """Rewrite the header in place if columns were added (rows kept, new cells empty)."""
-    if not LOG.exists():
+    if not log_file().exists():
         return
-    with open(LOG, newline="") as f:
+    with open(log_file(), newline="") as f:
         head = next(csv.reader(f), [])
     if head == FIELDS:
         return
-    old = list(csv.DictReader(open(LOG, newline="")))
+    old = list(csv.DictReader(open(log_file(), newline="")))
     write_all(old)
 
 
 def write_all(rs):
-    tmp = LOG.with_name(LOG.name + ".tmp")
+    tmp = log_file().with_name(log_file().name + ".tmp")
     with open(tmp, "w", newline="") as f:
         w = csv.DictWriter(f, FIELDS, extrasaction="ignore", restval="")
         w.writeheader()
         for r in rs:
             w.writerow({k: (v if v is not None else "") for k, v in r.items() if k in FIELDS})
-    os.replace(tmp, LOG)
+    os.replace(tmp, log_file())
 
 
 def append(row):
-    DATA.mkdir(parents=True, exist_ok=True)
+    data_dir().mkdir(parents=True, exist_ok=True)
     migrate()
-    new = not LOG.exists()
-    with open(LOG, "a", newline="") as f:
+    new = not log_file().exists()
+    with open(log_file(), "a", newline="") as f:
         w = csv.DictWriter(f, FIELDS)
         if new:
             w.writeheader()
@@ -182,7 +190,7 @@ def cmd_import():
                        source="history", file=str(g))
             append(row)
             n += 1
-    print(f"imported {n} past jobs -> {LOG}")
+    print(f"imported {n} past jobs -> {log_file()}")
 
 
 def parse_stats(text):
@@ -200,9 +208,9 @@ def append_stats(text):
     row = parse_stats(text)
     if not row:
         return None
-    DATA.mkdir(parents=True, exist_ok=True)
-    new = not STATS.exists()
-    with open(STATS, "a", newline="") as f:
+    data_dir().mkdir(parents=True, exist_ok=True)
+    new = not stats_file().exists()
+    with open(stats_file(), "a", newline="") as f:
         w = csv.writer(f)
         if new:
             w.writerow(["date", "prints", "finished", "failed", "total_hours", "longest_hours", "filament_m"])
@@ -213,8 +221,8 @@ def append_stats(text):
 def cmd_stats(text=None):
     """Snapshot the printer's lifetime counters (M78); pass text to parse instead of asking the printer."""
     if text is None:
-        import serial
-        with serial.Serial("/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0", 115200, timeout=1, exclusive=True) as s:
+        config.reexec_with_dialout()
+        with config.open_serial() as s:
             time.sleep(3); s.write(b"\n"); time.sleep(.5); s.reset_input_buffer()
             s.write(b"M78\n"); time.sleep(2)
             text = s.read(2000).decode(errors="replace")
@@ -223,6 +231,3 @@ def cmd_stats(text=None):
         sys.exit("no M78 stats in reply")
     print(f"printer lifetime: {row[1]} prints ({row[3]} failed), {round(float(row[4] or 0))} h, {row[6]} m")
 
-
-if __name__ == "__main__":
-    {"import": cmd_import, "stats": cmd_stats}[sys.argv[1]]()

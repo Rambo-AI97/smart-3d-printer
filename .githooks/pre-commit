@@ -1,0 +1,3 @@
+#!/bin/sh
+# Privacy scan before every commit (enable once: git config core.hooksPath .githooks)
+exec python3 "$(git rev-parse --show-toplevel)/scripts/privacy_scan.py"
