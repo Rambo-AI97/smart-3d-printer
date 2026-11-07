@@ -262,7 +262,13 @@ def cmd_calib(a):
 
 
 def cmd_web(a):
-    urls = ["http://localhost:8765", "http://<tailscale-ip>:8765"]
+    urls = ["http://localhost:8765"]
+    try:  # LAN/Tailscale address for phones, found at run time (never hard-coded)
+        ip = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=5).stdout.split()
+        if ip:
+            urls.append(f"http://{ip[0]}:8765")
+    except (OSError, subprocess.SubprocessError):
+        pass
     r = subprocess.run(["systemctl", "--user", "is-active", "p3d-web"], capture_output=True, text=True)
     if r.stdout.strip() != "active":
         subprocess.run(["systemctl", "--user", "start", "p3d-web"], check=False)
