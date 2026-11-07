@@ -10,6 +10,7 @@ part = "print";       // "print" (both, laid out for printing) | "clip" | "cup" 
 bar_d    = 32;        // clip inner diameter (fit test 2026-11-06: 32 and 33 fit; 32 grips foam harder)
 clip_w   = 3.2;       // ring wall (8 lines)
 clip_len = 30;        // along the bar
+rib_h    = 1.5;       // grip ribs: how far they press into the foam
 gap_frac = 0.68;      // snap opening (test clips used 0.72 with a thinner wall)
 cup_id   = 77;        // 73 mm bottle/mug + 4 mm clearance
 cup_wall = 3.2;
@@ -43,8 +44,11 @@ module clip() {
     rotate([0, 90, 0]) difference() { cylinder(h = 5, r = r_out + 1, center = true); cylinder(h = 6, r = r_out - 0.8, center = true); }
   }
   // grip ribs that press into the foam (stop the cup swinging round the bar)
-  for (a = [215, 250, 290, 325]) rotate([a, 0, 0]) translate([-clip_len/2, 0, r_in - 0.8])
-    cube([clip_len, 1.6, 1.2]);
+  // rounded ribs, rib_h into the foam (2026-11-06 test: thick ribs fit the bar very well)
+  for (a = [110, 145, 180, 215, 250]) rotate([a, 0, 0]) translate([0, 0, r_in - rib_h + 1.2])
+    rotate([0, 90, 0]) cylinder(h = clip_len, r = 1.2, center = true, $fn = 24);
+  for (a = [110, 145, 180, 215, 250]) rotate([a, 0, 0]) translate([-clip_len/2, -1.2, r_in - rib_h + 1.2])
+    cube([clip_len, 2.4, rib_h - 0.2]);
 }
 
 cup_y = plate_y + fit + tongue[2] + 3 + cup_id/2 + cup_wall - 2;   // cup centre
