@@ -6,3 +6,4 @@ data/
 models/*/
 !models/scad/
 models/scad/*.stl
+models/scad/*.png

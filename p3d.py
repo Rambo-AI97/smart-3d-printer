@@ -110,6 +110,75 @@ def cmd_print(a):
     print(f"started: {g.name}  (p3d status / p3d cancel)")
 
 
+def cmd_cooldown(_):
+    """Background: wait for the running print (if any) to end, then cool down + motors off + ntfy."""
+    inner = f"exec {sys.executable} {shlex.quote(str(ROOT / 'sender.py'))} --cooldown"
+    subprocess.run(["systemd-run", "--user", "--unit=p3d-cooldown", "--collect",
+                    "sg", "dialout", "-c", inner], check=True)
+    print("cooldown watcher started: ntfy when nozzle <50 C and bed <40 C (prints do this by themselves now)")
+
+
+def cmd_scad(a):
+    """OpenSCAD part -> STL + preview PNG (models/scad/NAME.scad). -D sets parameters."""
+    src = pathlib.Path(a.file).expanduser()
+    if not src.exists():
+        src = MODELS / "scad" / (a.file if a.file.endswith(".scad") else a.file + ".scad")
+    out = src.with_suffix(".stl")
+    defs = [x for d in (a.D or []) for x in ("-D", d)]
+    r = subprocess.run(["openscad", *defs, "-o", str(out), str(src)], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(r.stderr[-1500:])
+    view = [x for d in (a.view or []) for x in ("-D", d)]
+    subprocess.run(["openscad", *defs, *view, "--imgsize=900,700", "--viewall", "--autocenter",
+                    "-o", str(out.with_suffix(".png")), str(src)], capture_output=True)
+    print("stl:", out); print("preview:", out.with_suffix(".png"))
+
+
+def cmd_inspect(a):
+    """What's in a G-code: time, grams, sequence, filament share per feature, support by height."""
+    import collections
+    g = pathlib.Path(a.gcode).expanduser()
+    if g.is_dir():
+        g = next(g.glob("*.gcode"))
+    feat, sup, head = collections.Counter(), collections.Counter(), {}
+    t, z = None, 0.0
+    for line in open(g, errors="replace"):
+        if line.startswith(";TYPE:"):
+            t = line[6:].strip()
+        elif line.startswith(";Z:"):
+            z = float(line[3:])
+        elif line.startswith("G1") and " E" in line and t:
+            m = re.search(r" E([\d.]+)", line)
+            if m:
+                feat[t] += float(m.group(1))
+                if t.startswith("Support"):
+                    sup[int(z // 5) * 5] += float(m.group(1))
+        elif line.startswith("; ") and " = " in line:
+            k, v = line[2:].split(" = ", 1)
+            if k in ("estimated printing time (normal mode)", "total filament used [g]", "print_sequence",
+                     "max_z_height", "nozzle_temperature", "wall_loops", "sparse_infill_density", "support_type"):
+                head.setdefault(k, v.strip())
+        elif line.startswith("; max_z_height"):
+            head.setdefault("max_z_height", line.split(":")[-1].strip())
+    for k, v in head.items():
+        print(f"{k}: {v}")
+    tot = sum(feat.values()) or 1
+    print("filament by feature:", ", ".join(f"{k} {100*v/tot:.0f}%" for k, v in feat.most_common(8)))
+    if sup:
+        print("support by height:", ", ".join(f"{k}-{k+5}mm {100*v/tot:.0f}%" for k, v in sorted(sup.items())))
+
+
+def cmd_wait(a):
+    """Block until the print reaches a point (for scripts/agents): 'layer' = first layer down, 'done' = job ended."""
+    while True:
+        st = json.loads(STATE.read_text()) if STATE.exists() else {}
+        if not running():
+            print("job ended:", st.get("status")); return
+        if a.until == "layer" and st.get("layer"):
+            print(f"layer {st['layer']}: nozzle {st.get('nozzle')} C, bed {st.get('bed')} C, {st.get('progress')}%"); return
+        time.sleep(5)
+
+
 def cmd_log(_):
     import printlog
     r = printlog.rows()
@@ -215,6 +284,15 @@ if __name__ == "__main__":
     s = sub.add_parser("web", help="dashboard URL (starts the service if needed)"); s.add_argument("--open", action="store_true")
     s.set_defaults(fn=cmd_web)
     sub.add_parser("cancel").set_defaults(fn=cmd_cancel)
+    s = sub.add_parser("scad", help="OpenSCAD part -> STL + preview (name in models/scad or a path)")
+    s.add_argument("file"); s.add_argument("-D", action="append", help="param=value (repeat)")
+    s.add_argument("--view", action="append", help="extra -D only for the preview, e.g. 'part=\"assembly\"'")
+    s.set_defaults(fn=cmd_scad)
+    s = sub.add_parser("inspect", help="G-code breakdown: time, grams, feature share, support by height")
+    s.add_argument("gcode"); s.set_defaults(fn=cmd_inspect)
+    s = sub.add_parser("wait", help="block until first layer ('layer') or job end ('done')")
+    s.add_argument("until", choices=["layer", "done"]); s.set_defaults(fn=cmd_wait)
+    sub.add_parser("cooldown", help="after the current print: wait until cool, motors off, ntfy").set_defaults(fn=cmd_cooldown)
     sub.add_parser("log").set_defaults(fn=cmd_log)
     s = sub.add_parser("rate", help="rate the last print (1-5, issue tags, note)")
     s.add_argument("rating", nargs="?", type=int); s.add_argument("--issues"); s.add_argument("--note")

@@ -119,10 +119,38 @@ class Link:
             on_progress(len(cmds))
 
 
+COOL_NOZZLE, COOL_BED = 50.0, 40.0   # below these it's safe to switch the printer off
+
+
+def cooldown(link, limit_min=60):
+    """After a job: heaters off, wait until cool, then fans + all steppers off and ping ntfy.
+    The printer has no software power switch (no smart plug yet), so this is 'safe to switch off'."""
+    link.run(["M104 S0", "M140 S0", "M84"])
+    t0 = time.time()
+    while time.time() - t0 < limit_min * 60:
+        link.run(["M105"])
+        n, b = link.t.get("nozzle"), link.t.get("bed")
+        if n is not None and b is not None and n < COOL_NOZZLE and b < COOL_BED:
+            link.run(["M107", "M84"])
+            notify("Printer cool", f"nozzle {n:.0f} C, bed {b:.0f} C, motors off. Safe to switch off / remove print.",
+                   "snowflake")
+            return True
+        time.sleep(30)
+    notify("Printer still warm", f"after {limit_min} min: nozzle {n} C, bed {b} C", "warning")
+    return False
+
+
 def save(**kw):
     tmp = STATE.with_name(STATE.name + ".tmp")
     tmp.write_text(json.dumps(kw, indent=1))
     os.replace(tmp, STATE)
+
+
+def main_cooldown():
+    """Standalone: `p3d cooldown` (waits for a running print to end first)."""
+    while subprocess.run(["systemctl", "--user", "is-active", "-q", "p3d-print"]).returncode == 0:
+        time.sleep(30)
+    cooldown(Link())
 
 
 def main(path):
@@ -251,6 +279,10 @@ def main(path):
         save(file=name, status="done", progress=100, minutes=mins, **job)
         notify("Print done", f"{name}: {mins} min. Rate it: p3d rate 1-5", "white_check_mark")
         finish("done", mins)
+        try:
+            cooldown(link)
+        except Exception:
+            pass
     except KeyboardInterrupt as stop:
         link.run(SAFE_STOP)
         save(file=name, status="cancelled", at_line=stop.args[0] if stop.args else None, of=total, **job)
@@ -271,4 +303,4 @@ def main(path):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    main_cooldown() if sys.argv[1] == "--cooldown" else main(sys.argv[1])
