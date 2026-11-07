@@ -134,6 +134,53 @@ def cmd_scad(a):
     print("stl:", out); print("preview:", out.with_suffix(".png"))
 
 
+HUB_PUBLISH = pathlib.Path.home() / ".local/share/p3d/publish"
+HUB_LOG = pathlib.Path.home() / ".local/share/p3d/print_log.csv"
+
+
+def cmd_pack(a):
+    """Printables pack in the hub: STL, .scad, render.png, starter pack.json. Never overwrites pack.json or photo_*."""
+    import csv, json, shutil
+    name = a.model.removesuffix(".scad")
+    src = MODELS / "scad" / (name + ".scad")
+    if not src.exists():
+        sys.exit(f"no {src}")
+    out = HUB_PUBLISH / (a.dir or name.replace("_", "-"))
+    out.mkdir(parents=True, exist_ok=True)
+    defs = ["-D", f'part="{a.part}"'] if a.part else []
+    stl = out / (name + ".stl")
+    r = subprocess.run(["openscad", *defs, "-o", str(stl), str(src)], capture_output=True, text=True)
+    if r.returncode:
+        sys.exit(r.stderr[-1500:])
+    shutil.copy2(src, out / src.name)
+    subprocess.run(["openscad", *defs, "--render", "--imgsize=1200,900", "--colorscheme=Tomorrow",
+                    "--viewall", "--autocenter", "-o", str(out / "render.png"), str(src)], capture_output=True)
+    pj = out / "pack.json"
+    if not pj.exists():
+        row = None
+        if HUB_LOG.exists():
+            for r_ in csv.DictReader(HUB_LOG.open()):
+                if r_.get("name") == name and r_.get("status") == "done":
+                    row = r_
+        lines = []
+        if row:
+            mins = row.get("actual_min") or row.get("est_min") or "?"
+            lines = [f"- {row.get('filament','PETG')}, {row.get('layer_mm','0.2')} mm layers, {row.get('nozzle_mm','0.4')} mm nozzle",
+                     f"- Nozzle {row.get('nozzle_set','')} C, bed {row.get('bed_set','')} C",
+                     f"- About {mins} min, {row.get('grams','?')} g"]
+        pack = {"title": name.replace("_", " ").title(), "summary": "", "category": "",
+                "tags": [t for t in name.lower().split("_") if t][:10], "ai_assisted": True,
+                "license": "Creative Commons \u2014 Attribution \u2014 Share Alike",
+                "description": "Print settings (tested):\n" + "\n".join(lines) if lines else "",
+                "model_files": [stl.name, src.name],
+                "images": sorted(p.name for p in out.glob("photo_*.jpg")) + ["render.png"]}
+        pj.write_text(json.dumps(pack, indent=2, ensure_ascii=False) + "\n")
+        print("starter pack.json written (fill title/summary/category/description)")
+    else:
+        print("pack.json kept")
+    print("pack:", out)
+
+
 def cmd_inspect(a):
     """What's in a G-code: time, grams, sequence, filament share per feature, support by height."""
     import collections
@@ -288,6 +335,9 @@ if __name__ == "__main__":
     s.add_argument("file"); s.add_argument("-D", action="append", help="param=value (repeat)")
     s.add_argument("--view", action="append", help="extra -D only for the preview, e.g. 'part=\"assembly\"'")
     s.set_defaults(fn=cmd_scad)
+    s = sub.add_parser("pack", help="Printables pack in the hub publish/ folder (STL, scad, render, pack.json)")
+    s.add_argument("model"); s.add_argument("--part"); s.add_argument("--dir", help="folder name (default: model with - for _)")
+    s.set_defaults(fn=cmd_pack)
     s = sub.add_parser("inspect", help="G-code breakdown: time, grams, feature share, support by height")
     s.add_argument("gcode"); s.set_defaults(fn=cmd_inspect)
     s = sub.add_parser("wait", help="block until first layer ('layer') or job end ('done')")
