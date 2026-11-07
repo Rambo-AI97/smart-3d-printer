@@ -82,10 +82,10 @@
   "nil"
  ],
  "filament_z_hop": [
-  "nil"
+  "0.2"
  ],
  "filament_z_hop_types": [
-  "nil"
+  "Spiral Lift"
  ],
  "filament_retract_restart_extra": [
   "nil"
@@ -106,7 +106,7 @@
   "Generic"
  ],
  "filament_wipe": [
-  "nil"
+  "1"
  ],
  "filament_wipe_distance": [
   "nil"
@@ -136,7 +136,7 @@
   "; filament start gcode\n"
  ],
  "nozzle_temperature": [
-  "230"
+  "225"
  ],
  "temperature_vitrification": [
   "80"

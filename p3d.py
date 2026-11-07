@@ -182,7 +182,7 @@ def cmd_game(a):
     d = MODELS / a.name; d.mkdir(parents=True, exist_ok=True)
     glb = d / (a.name + ".glb")
     env = dict(__import__("os").environ, GD_SCRIPT=c["script"], GD_ARGS=json.dumps(c.get("args", [])),
-               GD_HIDE=c.get("hide", ""), OUT=str(glb))
+               GD_HIDE=c.get("hide", ""), GD_DROP_THIN=str(c.get("drop_thin", 0)), OUT=str(glb))
     r = subprocess.run(["godot", "--headless", "--path", str(pathlib.Path(c["game"]).expanduser()),
                         "-s", str(ROOT / "tools/model/godot_export.gd")], env=env, capture_output=True, text=True, timeout=300)
     if "EXPORT" not in r.stdout:

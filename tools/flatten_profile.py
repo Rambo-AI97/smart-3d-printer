@@ -22,10 +22,21 @@ FILAMENTS = {
 # Our calibration results, applied on top of the system presets (date: test that set it).
 CALIBRATED = {
     "petg": {
-        "nozzle_temperature": ["230"],                # 2026-11-06 temp tower: 220-255 all clean, strong; retraction test strung at 235 -> 230
         "nozzle_temperature_initial_layer": ["240"],  # a bit hotter first layer for grip
         "filament_flow_ratio": ["0.93"],              # 2026-11-06 flow test: 90-100 % of 0.95 smooth, 105+ ridged -> middle-low
+        # 2026-11-06 faering boat: heavy stringing between thin parts (damp spool). Less ooze + less dragging:
+        "nozzle_temperature": ["225"],                # temp tower clean 220-255; 230 strung on Benchy+boat -> 225 (cooler oozes less)
+        "filament_z_hop": ["0.2"],                    # 0.4 normal lift pulled strings up between masts/posts
+        "filament_z_hop_types": ["Spiral Lift"],
+        "filament_wipe": ["1"],
     },
+}
+
+# Applied to every process (draft/standard/fine). Date: print that set it.
+PROCESS_TUNED = {
+    "reduce_crossing_wall": "1",       # 2026-11-06 faering: travel inside the part, not across open air (fewer strings)
+    "travel_speed": "200",             # 2026-11-06: faster travel = less time to ooze (stock 150)
+    "support_type": "tree(auto)",      # 2026-11-06 faering: grid supports buried the boat; trees touch less, peel easier
 }
 
 
@@ -79,7 +90,7 @@ if __name__ == "__main__":
     OUT.mkdir(exist_ok=True)
     write("machine", MACHINE, "machine.json", fix_machine)
     for key, name in PROCESSES.items():
-        write("process", name, f"process-{key}.json", lambda d: d.update(print_settings_id=d["name"]))
+        write("process", name, f"process-{key}.json", lambda d: d.update(print_settings_id=d["name"], **PROCESS_TUNED))
     for key, name in FILAMENTS.items():
         write("filament", name, f"filament-{key}.json",
               lambda d, k=key: d.update(filament_settings_id=[d["name"]], **CALIBRATED.get(k, {})))

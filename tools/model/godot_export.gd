@@ -3,6 +3,7 @@ extends SceneTree
 ## Only visible meshes are exported, flattened to world space.
 ## Env: GD_SCRIPT=res://scripts/x.gd  GD_ARGS='["faering"]' (constructor args, JSON)
 ##      GD_HIDE='oars,flag,telltales' (properties holding a Node or Array of Nodes to hide)
+##      GD_DROP_THIN=0.05 (skip meshes thinner than this in two directions, e.g. ropes; model units)
 ##      OUT=/abs/path/out.glb
 ## Run: godot --headless --path GAME_DIR -s godot_export.gd   (p3d godot does this)
 var model: Node3D
@@ -38,10 +39,20 @@ func _process(_d: float) -> bool:
 func _copy(n: Node, out: Node3D) -> void:
 	if n is Node3D and not n.is_visible_in_tree():
 		return
-	if n is MeshInstance3D and n.mesh:
+	if n is MeshInstance3D and n.mesh and not _thin(n):
 		var m := MeshInstance3D.new()
 		m.mesh = n.mesh
 		out.add_child(m)
 		m.global_transform = n.global_transform
 	for c in n.get_children():
 		_copy(c, out)
+
+func _thin(n: MeshInstance3D) -> bool:
+	var t := OS.get_environment("GD_DROP_THIN").to_float()
+	if t <= 0.0:
+		return false
+	var sc := n.global_transform.basis.get_scale()
+	var d := n.mesh.get_aabb().size * sc
+	var dims := [d.x, d.y, d.z]
+	dims.sort()
+	return dims[1] < t   # thin in two directions = a rope/line
