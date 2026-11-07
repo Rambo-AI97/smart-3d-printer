@@ -55,9 +55,15 @@ def cmd_slice(a):
         proc["enable_support"] = "1"
     if a.brim:
         proc["brim_type"] = "outer_only"
+    if a.walls:  # strong parts: more perimeters matter more than infill
+        proc["wall_loops"] = str(a.walls)
+        proc["top_shell_layers"] = proc["bottom_shell_layers"] = str(max(5, a.walls))
+    if a.infill:
+        proc["sparse_infill_density"] = f"{a.infill}%"
+        proc["sparse_infill_pattern"] = "gyroid"
     pj = out / "process.json"
     pj.write_text(json.dumps(proc))
-    cmd = [str(ORCA), "--slice", "0", "--arrange", "1", "--orient", "1",
+    cmd = [str(ORCA), "--slice", "0", "--arrange", "1", "--orient", "0" if a.keep_orient else "1",
            "--load-settings", f"{ROOT}/profiles/machine.json;{pj}",
            "--load-filaments", f"{ROOT}/profiles/filament-{a.filament}.json",
            "--outputdir", str(out), str(model)]
@@ -202,6 +208,8 @@ if __name__ == "__main__":
     s.add_argument("-q", "--quality", default="standard", choices=["draft", "standard", "fine"])
     s.add_argument("-f", "--filament", default="petg", choices=["pla", "petg"])
     s.add_argument("--supports", action="store_true"); s.add_argument("--brim", action="store_true")
+    s.add_argument("--walls", type=int, help="perimeters (strong parts: 5-6)"); s.add_argument("--infill", type=int, help="percent, gyroid")
+    s.add_argument("--keep-orient", action="store_true", help="don't auto-rotate (part already laid out for strength)")
     s.set_defaults(fn=cmd_slice)
     s = sub.add_parser("print"); s.add_argument("gcode"); s.set_defaults(fn=cmd_print)
     s = sub.add_parser("web", help="dashboard URL (starts the service if needed)"); s.add_argument("--open", action="store_true")
