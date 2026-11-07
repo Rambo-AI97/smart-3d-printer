@@ -3,6 +3,8 @@
 
   python3 scripts/privacy_scan.py            scan all tracked + staged files (CI, pre-commit)
   python3 scripts/privacy_scan.py FILE...    scan these files
+  python3 scripts/privacy_scan.py --history  scan every commit (added lines, author/committer emails, messages)
+  python3 privacy_scan.py --repo PATH [--history]   scan another repo (hub copy: automation/public-repo/)
 
 Personal names are stored as salted hashes (the list itself must not leak them). Add your own words,
 one per line, to .privacy-blocklist (gitignored). A line ending in "privacy-ok" is skipped.
@@ -14,6 +16,11 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+if "--repo" in sys.argv:
+    i = sys.argv.index("--repo")
+    ROOT = pathlib.Path(sys.argv[i + 1]).expanduser().resolve()
+    del sys.argv[i:i + 2]
+NOREPLY = "users.noreply.github.com"
 NAME_HASHES = {
     "69c9d2183fcf13e1",
     "cb021ac4a1d5e2a1",
@@ -66,7 +73,7 @@ def scan(paths):
     hits = []
     for p in paths:
         p = pathlib.Path(p)
-        if p.suffix.lower() in SKIP or p.resolve() == pathlib.Path(__file__).resolve():
+        if p.suffix.lower() in SKIP or p.name == "privacy_scan.py":
             continue
         try:
             text = p.read_text()
@@ -84,8 +91,46 @@ def scan(paths):
     return hits
 
 
+def line_hits(text, where, hs, rx):
+    hits = []
+    if text.rstrip().endswith("privacy-ok"):
+        return hits
+    for k, r in rx.items():
+        if r.search(text):
+            hits.append(f"{where}: {k}")
+    for w in set(re.findall(r"[A-Za-z]{3,}", text)):
+        if h(w) in hs:
+            hits.append(f"{where}: personal name '{w}'")
+    return hits
+
+
+def scan_history():
+    """Every commit: emails must be GitHub noreply, messages and added lines must be clean."""
+    hs, rx = blocked_hashes(), {k: re.compile(v) for k, v in PATTERNS.items()}
+    git = lambda *a: subprocess.run(["git", *a], cwd=ROOT, capture_output=True, text=True, errors="replace").stdout
+    hits = []
+    for line in git("log", "--all", "--format=%h%x00%ae%x00%ce").splitlines():
+        c, ae, ce = line.split("\0")
+        for e in {ae, ce} - {"noreply@github.com"}:
+            if NOREPLY not in e:
+                hits.append(f"commit {c}: email {e} (use the GitHub noreply address)")
+    for c in git("rev-list", "--all").split():
+        for ln in git("show", "-s", "--format=%B", c).splitlines():
+            hits += line_hits(ln, f"commit {c[:7]} message", hs, rx)
+        cur = "?"
+        for ln in git("show", "--format=", "--unified=0", "--no-color", c).splitlines():
+            if ln.startswith("+++ "):
+                cur = ln[6:] if ln.startswith("+++ b/") else ln[4:]
+            elif ln.startswith("+") and pathlib.Path(cur).suffix.lower() not in SKIP and not cur.endswith("privacy_scan.py"):
+                hits += line_hits(ln[1:], f"commit {c[:7]} {cur}", hs, rx)
+    return sorted(set(hits))
+
+
 def main(argv):
-    hits = scan(argv or files())
+    if "--history" in argv:
+        hits = scan_history()
+    else:
+        hits = scan(argv or files())
     for x in hits:
         print(x)
     if hits:
