@@ -46,6 +46,9 @@ def cmd_slice(a):
     model = pathlib.Path(a.model).expanduser().resolve()
     stamp = time.strftime("%Y%m%d-%H%M")
     out = JOBS / f"{stamp}-{re.sub(r'[^A-Za-z0-9]+', '_', model.stem)}"
+    n = 2
+    while out.exists():  # two slices in the same minute
+        out = out.with_name(out.name.split("~")[0] + f"~{n}"); n += 1
     out.mkdir(parents=True)
     proc = json.load(open(ROOT / f"profiles/process-{a.quality}.json"))
     if a.supports:
