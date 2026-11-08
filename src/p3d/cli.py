@@ -88,8 +88,8 @@ def cmd_print(a):
 
 def cmd_cancel(_):
     c = cfg()
-    if not print_running():
-        print("no print running")
+    if not config.print_cancellable():
+        print("no print running" + (" (cooling down after the print)" if print_running() else ""))
         return
     c.state_dir.mkdir(parents=True, exist_ok=True)
     c.stop.touch()

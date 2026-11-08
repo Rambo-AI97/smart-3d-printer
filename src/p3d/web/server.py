@@ -1,4 +1,5 @@
-"""Read-only print dashboard: `p3d web` (service p3d-web). Stdlib only, no control endpoints."""
+"""Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except POST /api/cancel
+(safe stop, allowed from localhost and config `cancel_from` IPs only)."""
 import csv, json, pathlib, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -136,6 +137,22 @@ class H(BaseHTTPRequestHandler):
             self.send(json.dumps(log_rows()).encode(), "application/json")
         else:
             self.send(b"not found", "text/plain", 404)
+
+    def do_POST(self):
+        if self.path.split("?")[0] != "/api/cancel":
+            return self.send(b"not found", "text/plain", 404)
+        ip = self.client_address[0].removeprefix("::ffff:")
+        if ip not in ("127.0.0.1", "::1", *config.get().cancel_from):
+            return self.send(json.dumps({"error": "forbidden"}).encode(), "application/json", 403)
+        try:
+            if not config.print_cancellable():
+                return self.send(json.dumps({"ok": "nothing to stop"}).encode(), "application/json")
+            c = config.get()
+            c.state_dir.mkdir(parents=True, exist_ok=True)
+            c.stop.touch()  # same as `p3d cancel`: the sender turns heaters off, lifts, parks, logs it
+            self.send(json.dumps({"ok": "cancel requested"}).encode(), "application/json")
+        except Exception as e:
+            self.send(json.dumps({"error": str(e)}).encode(), "application/json", 500)
 
     def log_message(self, *a):
         pass

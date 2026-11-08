@@ -35,6 +35,7 @@ DEFAULTS = {
     "ntfy_token": "",
     "web_port": 8765,
     "web_host": "0.0.0.0",
+    "cancel_from": [],       # extra IPs allowed to POST /api/cancel (localhost always is), e.g. a home server
     "park_y": 220,           # Y to park at on cancel (bed depth)
 }
 
@@ -234,3 +235,8 @@ def unit_active(unit):
 
 def print_running():
     return unit_active("p3d-print")
+
+
+def print_cancellable():
+    """A job is printing or heating (not just the post-print cooldown, which keeps p3d-print active)."""
+    return print_running() and read_state().get("status") not in ("done", "cancelled", "failed")
