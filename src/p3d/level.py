@@ -11,11 +11,10 @@ import csv, re, sys, time
 from . import config
 GOOD, OK = 0.30, 0.60  # mm span: good / usable
 QUARTER = 0.175        # mm per 1/4 turn of an M4 bed screw (0.7 mm pitch)
-TURN_HELP = "  (Allen key in the screw from the top, looking down at the bed. Clockwise = that corner goes down.)"
 
 
-def talk(ser, cmd, wait=300):
-    """Send one command, return all lines until 'ok'."""
+def talk(ser, cmd, wait=300, live=None):
+    """Send one command, return all lines until 'ok'. live(line) sees each line as it arrives."""
     ser.write((cmd + "\n").encode())
     out, end = [], time.time() + wait
     while time.time() < end:
@@ -24,6 +23,8 @@ def talk(ser, cmd, wait=300):
             return out
         if line:
             out.append(line)
+            if live:
+                live(line)
             end = time.time() + wait  # still alive (busy/temps keep it going)
     raise RuntimeError(f"no 'ok' after {cmd}")
 
@@ -54,10 +55,6 @@ def report(grid):
     flat = [v for r in grid for v in r]
     span = max(flat) - min(flat)
     n = len(grid[0])
-    left = sum(r[0] for r in grid) / len(grid)
-    right = sum(r[-1] for r in grid) / len(grid)
-    front = sum(grid[0]) / n
-    back = sum(grid[-1]) / n
     print("\n  Bed map (mm, + = bed closer to nozzle). Seen from the front of the printer:\n")
     for i, r in enumerate(reversed(grid)):
         label = "back " if i == 0 else ("front" if i == len(grid) - 1 else "     ")
@@ -65,17 +62,7 @@ def report(grid):
     print("        left" + " " * (n * 7 - 9) + "right\n")
     verdict = "GOOD" if span <= GOOD else ("OK" if span <= OK else "NEEDS WORK")
     print(f"  Span: {span:.2f} mm  ->  {verdict}   (good <= {GOOD}, usable <= {OK})")
-    lr, fb = left - right, front - back
-    if abs(lr) > 0.15:
-        side = "left" if lr > 0 else "right"
-        print(f"  Left/right: the {side} side is {abs(lr):.2f} mm higher -> raise the {side} end of the X gantry "
-              f"(printer off, turn that Z screw by hand), then run p3d level again.")
-    if abs(fb) > 0.15:
-        side = "front" if fb > 0 else "back"
-        print(f"  Front/back: the {side} is {abs(fb):.2f} mm higher (bed/Y-rail tilt; the auto mesh corrects up to ~0.5 mm).")
     corners(grid)
-    if span <= GOOD:
-        print("  Nothing to adjust. The saved mesh handles the rest.")
     return span
 
 
@@ -84,7 +71,7 @@ def corners(grid):
     c = [("BACK-LEFT", grid[-1][0]), ("BACK-RIGHT", grid[-1][-1]), ("FRONT-LEFT", grid[0][0]), ("FRONT-RIGHT", grid[0][-1])]
     ref = sum(v for _, v in c) / 4
     from fractions import Fraction
-    print("\n  WHAT TO TURN:")
+    print("\n  WHAT TO TURN (Allen key from the top; clockwise = down):")
     for name, v in c:
         d = v - ref                                   # + = corner too high -> clockwise (down)
         eighths = round(abs(d) / QUARTER * 2)         # 1/8-turn steps
@@ -96,7 +83,7 @@ def corners(grid):
         amount = " ".join(x for x in (str(whole) if whole else "", str(part) if part else "") if x)
         way = "CLOCKWISE" if d > 0 else "COUNTER-CLOCKWISE"
         print(f"    {name:<12} {amount} turn {way:<17} ({'too high' if d > 0 else 'too low'} by {abs(d):.2f} mm)")
-    print(TURN_HELP)
+
 
 
 def save(grid, span):
@@ -122,7 +109,13 @@ def bed_temp(ser):
 def probe(ser):
     print("Homing and probing (about 2 minutes)...", flush=True)
     talk(ser, "G28")
-    talk(ser, "G29", wait=600)
+    n = [0]
+    def show(line):
+        m = re.search(r"Bed X:\s*([-\d.]+)\s*Y:\s*([-\d.]+)\s*Z:\s*([-\d.]+)", line)
+        if m:
+            n[0] += 1
+            print(f"  point {n[0]:>2}  X{float(m.group(1)):>5.0f} Y{float(m.group(2)):>5.0f}  Z {float(m.group(3)):+.3f}", flush=True)
+    talk(ser, "G29", wait=600, live=show)
     talk(ser, "M500")  # keep the new mesh after power-off
     grid = parse_grid(talk(ser, "M420 V"))
     present(ser)
