@@ -11,9 +11,7 @@ import csv, re, sys, time
 from . import config
 GOOD, OK = 0.30, 0.60  # mm span: good / usable
 QUARTER = 0.175        # mm per 1/4 turn of an M4 bed screw (0.7 mm pitch)
-TURN_HELP = ("  Which way:  TIGHTEN = corner goes DOWN (more gap),  LOOSEN = corner goes UP.\n"
-             "    screw head on top (hex key from above): tighten = CLOCKWISE seen from above\n"
-             "    knob under the bed: tighten = turn it so the knob climbs UP toward the bed")
+TURN_HELP = "  (Allen key in the screw from the top, looking down at the bed. Clockwise = that corner goes down.)"
 
 
 def talk(ser, cmd, wait=300):
@@ -82,23 +80,22 @@ def report(grid):
 
 
 def corners(grid):
-    """Per-corner bed-screw instructions, relative to the average of the 4 corners."""
-    c = {"back-left": grid[-1][0], "back-right": grid[-1][-1], "front-left": grid[0][0], "front-right": grid[0][-1]}
-    ref = sum(c.values()) / 4
-    todo = []
-    for name, v in c.items():
-        d = v - ref                                   # + = this corner is high -> lower it (tighten)
-        q = round(abs(d) / QUARTER * 2) / 2           # quarter turns, to the nearest 1/8 turn
-        if q < 0.5:
+    """Exactly what to do with the Allen key at each of the 4 bed screws."""
+    c = [("BACK-LEFT", grid[-1][0]), ("BACK-RIGHT", grid[-1][-1]), ("FRONT-LEFT", grid[0][0]), ("FRONT-RIGHT", grid[0][-1])]
+    ref = sum(v for _, v in c) / 4
+    from fractions import Fraction
+    print("\n  WHAT TO TURN:")
+    for name, v in c:
+        d = v - ref                                   # + = corner too high -> clockwise (down)
+        eighths = round(abs(d) / QUARTER * 2)         # 1/8-turn steps
+        if eighths == 0:
+            print(f"    {name:<12} leave it")
             continue
-        from fractions import Fraction
-        t = Fraction(int(q * 2), 8)                   # eighths of a turn
+        t = Fraction(eighths, 8)
         whole, part = divmod(t, 1)
         amount = " ".join(x for x in (str(whole) if whole else "", str(part) if part else "") if x)
-        what = "TIGHTEN (lower)" if d > 0 else "LOOSEN (raise)"
-        todo.append(f"    {name:<12} {d:+.2f} mm  ->  {what} {amount} turn")
-    print("\n  Bed screws (vs the corner average):")
-    print("\n".join(todo) if todo else "    all four corners within 0.05 mm: leave them")
+        way = "CLOCKWISE" if d > 0 else "COUNTER-CLOCKWISE"
+        print(f"    {name:<12} {amount} turn {way:<17} ({'too high' if d > 0 else 'too low'} by {abs(d):.2f} mm)")
     print(TURN_HELP)
 
 
