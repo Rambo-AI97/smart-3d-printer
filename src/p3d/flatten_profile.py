@@ -74,6 +74,9 @@ def fix_machine(d):
     if "M420" not in d["machine_start_gcode"]:  # turn the saved bed mesh on after homing
         d["machine_start_gcode"] = d["machine_start_gcode"].replace(
             "G28 ;Home \n", "G28 ;Home \nM420 S1 Z10 ;Use saved bed mesh\n", 1)
+    # end: lift well clear of the part (>= 40 mm above it, max 245) before presenting the bed
+    d["machine_end_gcode"] = d["machine_end_gcode"].replace(
+        "G90 ;Absolute positionning \n", "G90 ;Absolute positionning \nG1 Z{min(max_layer_z + 40, 245)} F600 ;Lift clear\n", 1)
 
 
 def write_gui_filament(key, name):

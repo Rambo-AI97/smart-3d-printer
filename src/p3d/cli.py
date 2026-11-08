@@ -383,7 +383,7 @@ def _idle_port():
 def cmd_level(a):
     _idle_port()
     from . import level
-    level.main(a.show, a.hot)
+    level.main(a.show, a.hot, a.soak, a.adjust)
 
 
 def cmd_calib(a):
@@ -509,7 +509,9 @@ COMMANDS = {
     "Calibrate": [
         ("level", cmd_level, "probe the bed, save the mesh, show a colour map",
          [A("--show", action="store_true", help="show the saved mesh, no probing"),
-          A("--hot", type=int, default=0, metavar="BED_C", help="heat the bed first (70 PETG, 55 PLA)")]),
+          A("--hot", type=int, default=0, metavar="BED_C", help="heat the bed first (70 PETG, 55 PLA); no wait if already hot"),
+          A("--soak", type=float, default=None, metavar="MIN", help="settle minutes after heating (default 2; 0 = none)"),
+          A("--adjust", action="store_true", help="loop: probe, show what to turn per corner, Enter = probe again (bed stays hot)")]),
         ("calib", cmd_calib, "make a calibration print: temp, retraction, flow, firstlayer",
          [A("test", choices=["temp", "retraction", "flow", "firstlayer"]), FIL]),
         ("pid", cmd_pid, "PID-tune hotend and bed, save to EEPROM",

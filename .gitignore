@@ -20,3 +20,4 @@ models/scad/*.png
 # personal (phone number / private use): never publish
 models/scad/dog_tag.scad
 models/scad/walk_kit.scad
+models/scad/coffee_plate.*

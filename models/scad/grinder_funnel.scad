@@ -3,9 +3,9 @@
 // the grounds run out of the point into the French press.
 // Flair: shield band on the sleeve, a keel ridge running up into the pour point (longship bow),
 // "KAFFI" runes on the back, flared rim. Printed upright on the sleeve flange, no supports.
-bowl_d = 77;      // grinder bowl outside diameter (measured 2026-11-08)
+bowl_d = 79;      // grinder bowl outside diameter (measured 77, fit ring was 2 mm too tight)
 grip_h = 25;      // sleeve depth (straight wall is 35)
-part = "collar";  // "collar" | "fit" (8 mm test ring) | "plate" (collar + V2 scoop)
+part = "collar";  // "collar" | "fit" (8 mm test ring)
 
 wall = 2.4;  rib = 0.5;  clear = 0.6;  relief = 0.8;
 body_h = 24;      // collar height above the grinder rim
@@ -66,7 +66,5 @@ module runes() {   // on the back (vertical wall), reading left to right
 module collar() { difference() { union() { outer(); shields(); keel(); runes(); } inner(); } ribs(); }
 module fit_ring() intersection() { collar(); cylinder(d = 200, h = 8); }
 
-use <phone_kit_v2.scad>
 if (part == "fit") fit_ring();
-else if (part == "plate") { translate([-45, 0, 0]) collar(); translate([62, 0, 0]) rotate(90) scoop(); }
-else collar();
+else if (part == "collar") collar();
