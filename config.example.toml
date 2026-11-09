@@ -25,3 +25,10 @@ web_host = "0.0.0.0" # "127.0.0.1" = this PC only
 
 # Printer geometry used by cancel (park the head at the back so the part is reachable)
 park_y = 220
+
+# Control endpoints (pause, resume, queue/next, ideas) accept localhost and these addresses (cancel_from counts too).
+control_from = []
+ideas_file = ""      # print-ideas board (Markdown); default <data_dir>/../ideas.md
+# Where the printer probes Z (G28) and the clearance kept around it before p3d recover/addon may use G28.
+z_home_xy = [110, 110]
+z_home_margin = 12

@@ -25,18 +25,34 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 |---|---|---|
 | Print | `p3d status [--json]` | current job, progress, temperatures |
 | | `p3d print FILE.gcode` | print in the background (survives closing the terminal) |
+| | `p3d print FILE --pause-at-layer N` | pause before layer N (magnets, colour swap); `--force` ignores a low spool |
+| | `p3d pause [--at-layer N]` / `p3d resume` | host-side pause at a layer change (retract, lift, park, heaters stay on) |
 | | `p3d cancel` | safe stop: heaters off, lift, park |
+| | `p3d queue add JOB \| list \| remove N \| next` | queue of approved jobs; `next` starts the head (refuses while printing or when the spool is short) |
 | | `p3d wait layer\|done` | block until the first layer is down / the job ends (for scripts) |
 | | `p3d web [--open]` | live dashboard URL (also for your phone) |
 | Design | `p3d slice MODEL [-q draft\|standard\|fine] [-f pla\|petg] [--supports] [--brim]` | model → G-code |
 | | `p3d scad NAME` | OpenSCAD part → STL + preview |
 | | `p3d inspect FILE.gcode` | where the time and filament go |
 | | `p3d pack NAME` | upload pack for Printables (STL, source, render) |
+| | `p3d recover JOB [--from-layer N \| --z MM]` | continue a failed print from its last good layer (writes a job, never prints) |
+| | `p3d addon MODEL --on-z MM [--x --y]` | slice a model to print on top of an existing part (writes a job, never prints) |
 | Calibrate | `p3d level [--hot 70]` | probe the bed, colour map, what to adjust |
 | | `p3d calib temp\|retraction\|flow\|firstlayer` | make a calibration print |
 | | `p3d pid` / `p3d probe` | PID-tune heaters / read-only firmware check |
-| Data | `p3d log`, `p3d history`, `p3d rate` | job log, totals, ratings |
+| Data | `p3d log`, `p3d history`, `p3d rate` | job log, totals, ratings (issue tags print a concrete next step) |
+| | `p3d suggest`, `p3d stats` | recurring issues with fixes; success, rating, grams, hours per week and when settings changed |
+| | `p3d spool add\|list\|use\|set` | filament spools; grams are deducted when a job ends (done = all, stopped = share printed) |
+| | `p3d idea add\|list\|move\|done` | print ideas in a hand-editable `ideas.md` |
 | Setup | `p3d setup`, `p3d doctor`, `p3d install-service` | first run, health check, background services |
+
+### Smart features
+
+- **Bed step-down:** PETG first layer 70 C, then 60 C (PLA 60/55); set in `flatten_profile.py`, applied to every plate variant.
+- **Pause/resume** works on stock Marlin: the sender stops at a layer boundary, retracts, lifts and parks; resume returns, primes and carries on. The dashboard and the ntfy message have Pause/Resume buttons (POST `/api/pause`, `/api/resume`).
+- **Recover / add-on:** the Ender-3 V3 SE probes Z with the nozzle at one point (config `z_home_xy`, default bed centre). If the part's footprint covers that point, or is unknown, the generated job never probes Z: you lower the nozzle onto the part top by hand and the job declares that height (`G92 Z`), then homes X/Y only. If the footprint is known and clear (+ `z_home_margin`), it uses a normal `G28`. Both write `INSTRUCTIONS.txt` next to the G-code and need `p3d print --confirm-z`. Untested on hardware until watched once.
+- **Stats:** every job stores a settings snapshot (layer height, temperatures incl. the bed step-down, speeds, walls, infill, retraction, profile hash); the dashboard Stats tab charts success and rating by week, issues, grams and hours, spool levels and a settings-change timeline.
+- **Control endpoints** (`/api/cancel`, `pause`, `resume`, `queue/next`, `ideas`) accept localhost plus the addresses in `cancel_from` / `control_from` in the config. The queue lives in `print_queue.json` and spools in `spools.json` in the data dir; the ideas board is `ideas.md` next to it (`ideas_file` to move it).
 
 `p3d --help` lists everything; `p3d <command> -h` explains one command.
 
