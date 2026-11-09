@@ -21,8 +21,8 @@ ledge_d = 16;    // phone + case thickness
 tray_d = 24;  tray_h = 12;  front_wall = 3;
 
 // standard USB-C overmold, generous; plug drops in from the top
-boot_w = 12.5;  boot_t = 8;  boot_len = 18;
-cable_w = 3.6;  port_off = 6;   // port centre in front of the phone's back face
+boot_w = 18;  boot_t = 12;  boot_len = 20;   // v3 2026-11-09: 12.5x8 was far too small for the real plug
+cable_w = 5;  port_off = 6;   // port centre in front of the phone's back face
 
 pad_d = 71;  pad_u = 66;  skin = 1.2;   // Qi pad pocket (measure the pad you buy)
 
