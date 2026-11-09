@@ -2,18 +2,19 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Printer</title>
 <style>
-:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--fg:#e8eaf0;--mute:#8b92a1;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#f5a524;--bad:#ef5350;--noz:#ff7a45;--bed:#4ea1ff}
+:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--fg:#e8eaf0;--mute:#8b92a1;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#f5a524;--bad:#ef5350;--noz:#ff7a45;--bed:#4ea1ff;--accbg:#12304f;--okbg:#10381f;--warnbg:#3d2d0a;--badbg:#40181a;--pvbg:#1f2126}
+@media(prefers-color-scheme:light){:root{--bg:#f4f5f8;--card:#fff;--line:#dfe2ea;--fg:#1b1e26;--mute:#5d6577;--acc:#1f6fd1;--ok:#14935a;--warn:#b86e00;--bad:#d03a37;--noz:#d9541e;--bed:#1f6fd1;--accbg:#dbe9fb;--okbg:#d8f3e5;--warnbg:#fbeccd;--badbg:#fbdcdc;--pvbg:#e9ebf0}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif}
 main{max-width:980px;margin:0 auto;padding:16px;display:grid;gap:14px}
 h1{font-size:20px;margin:0;font-weight:600;display:flex;justify-content:space-between;align-items:center}
 .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}
 .hero{display:grid;grid-template-columns:minmax(0,260px) 1fr;gap:18px;align-items:center}
 @media(max-width:640px){.hero{grid-template-columns:1fr}}
-#pv{width:100%;aspect-ratio:1;border-radius:10px;background:#1f2126;object-fit:contain}
+#pv{width:100%;aspect-ratio:1;border-radius:10px;background:var(--pvbg);object-fit:contain}
 .name{font-size:26px;font-weight:650;word-break:break-word}
 .badge{display:inline-block;padding:3px 12px;border-radius:99px;font-size:13px;font-weight:600;background:var(--line);color:var(--mute);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
-.badge.printing{background:#12304f;color:var(--acc)}.badge.done{background:#10381f;color:var(--ok)}
-.badge.cancelled{background:#3d2d0a;color:var(--warn)}.badge.failed{background:#40181a;color:var(--bad)}
+.badge.printing{background:var(--accbg);color:var(--acc)}.badge.paused{background:var(--warnbg);color:var(--warn)}.badge.done{background:var(--okbg);color:var(--ok)}
+.badge.cancelled{background:var(--warnbg);color:var(--warn)}.badge.failed{background:var(--badbg);color:var(--bad)}
 .prog{display:flex;align-items:center;gap:18px;margin-top:10px}
 .ring{position:relative;width:120px;height:120px;flex:none}.ring svg{transform:rotate(-90deg)}
 .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:26px}
@@ -26,17 +27,22 @@ canvas{width:100%;height:150px;display:block;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td.s-failed{color:var(--bad)}td.s-cancelled{color:var(--warn)}
 .tabs{display:flex;gap:8px}.tabs button{background:var(--card);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:6px 16px;font:inherit;font-size:14px;cursor:pointer}
-.tabs button.on{background:#12304f;color:var(--acc);border-color:var(--acc)}
-.hide{display:none!important}#live,#hist{display:grid;gap:14px}
+.tabs button.on{background:var(--accbg);color:var(--acc);border-color:var(--acc)}
+.hide{display:none!important}#live,#hist,#stats,#ideas{display:grid;gap:14px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.grid2{grid-template-columns:1fr}}
 .cv{height:190px}.leg{font-size:12px;color:var(--mute);margin-top:4px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips button{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
 .chips button.on{border-color:var(--acc);color:var(--acc)}.chips button:disabled{opacity:.35;cursor:default}
 .cal{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:14px}.cal span{color:var(--mute);font-size:12px;display:block}
+button.act{background:var(--accbg);color:var(--acc);border:1px solid var(--acc);border-radius:10px;padding:8px 16px;font:inherit;font-size:14px;cursor:pointer;margin:8px 8px 0 0}
+button.act:disabled{opacity:.4;cursor:default}.msg{font-size:13px;color:var(--mute);margin-top:6px}
+.idea{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.idea span{flex:1;word-break:break-word}
+select,input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px}
+input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl{font-size:13px;margin-top:6px;color:var(--mute)}.tl b{color:var(--fg)}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
 </style></head><body><main>
 <h1>Printer <span id="upd">connecting...</span></h1>
-<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button></div>
+<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button></div>
 <div id="live">
 <section class="card hero">
   <img id="pv" alt="model preview" style="visibility:hidden">
@@ -44,15 +50,19 @@ th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td
     <span class="badge" id="badge">idle</span>
     <div class="name" id="name">No active job</div>
     <div class="prog">
-      <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="#262a33" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#4ea1ff" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
+      <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" style="color:var(--line)" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#4ea1ff" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
       <div class="stats">
         <div><span>Time left</span><b id="left">–</b></div><div><span>Done at</span><b id="eta">–</b></div>
         <div><span>Elapsed</span><b id="el">–</b></div><div><span>Est. total</span><b id="tot">–</b></div>
         <div><span>Layer</span><b id="layer">–</b></div><div><span>Z height</span><b id="z">–</b></div>
       </div>
     </div>
+    <div><button class="act" id="b-pause" onclick="post('/api/pause','m-ctl')">Pause</button><button class="act" id="b-resume" onclick="post('/api/resume','m-ctl')">Resume</button></div>
+    <div class="msg" id="m-ctl"></div>
   </div>
 </section>
+<section class="card"><div class="lab">Print queue (approved jobs)</div><div id="queue" style="margin-top:6px">–</div>
+  <button class="act" id="b-next" onclick="if(confirm('Start the next queued print? The bed must be clear.'))post('/api/queue/next','m-q')">Start next print</button><div class="msg" id="m-q"></div></section>
 <section class="card">
   <div class="temps">
     <div class="temp"><div class="lab">Nozzle</div><b id="noz">–</b> <small id="nozt"></small></div>
@@ -77,6 +87,20 @@ th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td
 <div class="leg"><i style="background:#ff7a45"></i>nozzle<i style="background:#4ea1ff"></i>bed<i style="background:#3ecf8e"></i>progress % (right axis)</div><div class="leg" id="jobinfo"></div></section>
 <section class="card"><div class="lab">Calibration</div><div class="cal" id="cal" style="margin-top:8px"></div></section>
 </div>
+<div id="stats" class="hide">
+<section class="card"><div class="lab">Success rate and average rating by week</div><canvas class="cv" id="s-succ"></canvas><div class="leg"><i style="background:var(--ok)"></i>success % (left)<i style="background:var(--acc)"></i>rating (right, 0 to 5)</div></section>
+<div class="grid2">
+<section class="card"><div class="lab">Issue frequency</div><canvas class="cv" id="s-issues"></canvas></section>
+<section class="card"><div class="lab">Spool levels (g left)</div><canvas class="cv" id="s-spools"></canvas><div class="leg"><i style="background:var(--warn)"></i>under 100 g</div></section>
+<section class="card"><div class="lab">Filament used per week (g)</div><canvas class="cv" id="s-grams"></canvas></section>
+<section class="card"><div class="lab">Print hours per week</div><canvas class="cv" id="s-hours"></canvas></section>
+</div>
+<section class="card"><div class="lab">Settings changes (dashed line = settings changed before that job)</div><canvas class="cv" id="s-tl" style="height:150px"></canvas><div class="leg"><i style="background:var(--ok)"></i>done<i style="background:var(--warn)"></i>cancelled<i style="background:var(--bad)"></i>failed</div><div id="s-chg" class="tl"></div><div id="s-rec" class="tl"></div></section>
+</div>
+<div id="ideas" class="hide">
+<section class="card"><div class="lab">Add an idea</div><div class="row" style="margin-top:8px"><input type="text" id="i-text" placeholder="print idea, #tags allowed"><select id="i-status"></select><button class="act" style="margin:0" onclick="addIdea()">Add</button></div><div class="msg" id="m-i"></div></section>
+<section class="card"><div class="lab">Ideas</div><div id="i-list" style="margin-top:6px">–</div></section>
+</div>
 </main>
 <script>
 const $=id=>document.getElementById(id), D='–';
@@ -91,7 +115,7 @@ function render(s){
   $('name').textContent=s.file||'No active job';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
   const pct=num(s.progress);$('pct').textContent=pct===null?D:Math.round(pct)+'%';
   $('arc').setAttribute('stroke-dashoffset',326.7*(1-(pct||0)/100));
-  $('arc').setAttribute('stroke',st==='done'?'#3ecf8e':st==='failed'?'#ef5350':st==='cancelled'?'#f5a524':'#4ea1ff');
+  theme();$('arc').setAttribute('stroke',st==='done'?COL.done:st==='failed'?COL.failed:st==='cancelled'?COL.cancelled:COL.acc);$('b-pause').disabled=st!=='printing';$('b-resume').disabled=st!=='paused';
   let el=num(s.elapsed_min),rem=num(s.remaining_min),printing=st==='printing';
   if(printing){const t0=parseStarted(s.started);if(t0)el=(Date.now()-t0)/60000}  // tick between 5 s writes
   if(rem===null&&printing&&pct>0&&el!==null)rem=el*(100-pct)/pct;
@@ -108,19 +132,19 @@ function render(s){
   if(tt.nozzle!==undefined){hist.push({t:Date.now(),n:tt.nozzle,b:tt.bed,nt:tt.nozzle_target,bt:tt.bed_target});while(hist.length&&hist[0].t<Date.now()-600000)hist.shift()}
   chart();
 }
-function chart(){
+function chart(){theme();
   const c=$('chart'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;
   const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);
   const vals=hist.flatMap(p=>[p.n,p.b,p.nt,p.bt]).filter(v=>v!=null);
-  if(hist.length<2){x.fillStyle='#8b92a1';x.font='13px system-ui';x.fillText('collecting temperature history...',8,h/2);return}
+  if(hist.length<2){x.fillStyle=T.mute;x.font='13px system-ui';x.fillText('collecting temperature history...',8,h/2);return}
   const hi=Math.max(...vals,60)+10,lo=Math.max(0,Math.min(...vals)-10),t1=Date.now(),t0=t1-600000,L=34;
   const X=t=>L+(t-t0)/600000*(w-L-4),Y=v=>h-14-(v-lo)/(hi-lo)*(h-24);
-  x.strokeStyle='#262a33';x.fillStyle='#8b92a1';x.font='11px system-ui';x.lineWidth=1;
+  x.strokeStyle=T.line;x.fillStyle=T.mute;x.font='11px system-ui';x.lineWidth=1;
   for(let i=0;i<=3;i++){const v=lo+(hi-lo)*i/3,y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(w,y);x.stroke();x.fillText(Math.round(v),2,y+4)}
   x.fillText('-10 min',L,h-1);x.fillText('now',w-26,h-1);
   const line=(k,col,dash)=>{x.beginPath();x.strokeStyle=col;x.setLineDash(dash?[4,4]:[]);x.lineWidth=dash?1:2;let m=false;
     hist.forEach(p=>{if(p[k]==null)return;m?x.lineTo(X(p.t),Y(p[k])):x.moveTo(X(p.t),Y(p[k]));m=true});x.stroke();x.setLineDash([])};
-  line('nt','#ff7a4577',1);line('bt','#4ea1ff77',1);line('n','#ff7a45');line('b','#4ea1ff');
+  line('nt',COL.noz+'77',1);line('bt',COL.acc+'77',1);line('n',COL.noz);line('b',COL.acc);
 }
 let lastImgJob=null;
 async function tick(){
@@ -133,28 +157,30 @@ async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-st
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
 
 let curTab='live',histLoaded=0,H=null;
-function tab(t){curTab=t;for(const k of['live','hist']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
-  if(t==='hist'){loadHist()}else chart()}
-const COL={done:'#3ecf8e',cancelled:'#f5a524',failed:'#ef5350',acc:'#4ea1ff',noz:'#ff7a45'};
-function cv(id){const c=$(id),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;
+function tab(t){curTab=t;for(const k of['live','hist','stats','ideas']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
+  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else chart()}
+const COL={};let T={};
+function theme(){const cs=getComputedStyle(document.documentElement),g=k=>cs.getPropertyValue('--'+k).trim();
+  Object.assign(T,{line:g('line'),mute:g('mute'),fg:g('fg')});Object.assign(COL,{done:g('ok'),cancelled:g('warn'),failed:g('bad'),acc:g('acc'),noz:g('noz')})}theme();
+function cv(id){theme();const c=$(id),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;
   const x=c.getContext('2d');x.scale(r,r);x.clearRect(0,0,w,h);x.font='11px system-ui';return{x,w,h}}
-function empty(g,msg){g.x.fillStyle='#8b92a1';g.x.fillText(msg||'no data yet',8,g.h/2)}
+function empty(g,msg){g.x.fillStyle=T.mute;g.x.fillText(msg||'no data yet',8,g.h/2)}
 // shared axes: returns X/Y mappers for numeric ranges
 function axes(g,x0,x1,y0,y1,opt={}){const L=34,R=opt.right||6,T=8,B=18,x=g.x;
   const X=v=>L+(v-x0)/((x1-x0)||1)*(g.w-L-R),Y=v=>g.h-B-(v-y0)/((y1-y0)||1)*(g.h-B-T);
-  x.strokeStyle='#262a33';x.fillStyle='#8b92a1';x.lineWidth=1;
+  x.strokeStyle=T.line;x.fillStyle=T.mute;x.lineWidth=1;
   for(let i=0;i<=3;i++){const v=y0+(y1-y0)*i/3,y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(g.w-R,y);x.stroke();x.fillText(+v.toFixed(2),2,y+4)}
   return{X,Y,L,R,B}}
 const niceMax=v=>{const p=Math.pow(10,Math.floor(Math.log10(v||1))),m=v/p;return(m<=1?1:m<=2?2:m<=5?5:10)*p};
 function bars(id,weeks,keys,cols){const g=cv(id);if(!weeks.length)return empty(g);
   const mx=niceMax(Math.max(...weeks.map(w=>keys.reduce((s,k)=>s+w[k],0)),1)),a=axes(g,0,weeks.length,0,mx),bw=Math.min(40,(g.w-a.L-6)/weeks.length*.7);
   weeks.forEach((w,i)=>{let acc=0;const cx=a.X(i+.5);keys.forEach((k,j)=>{const v=w[k];if(!v)return;g.x.fillStyle=cols[j];g.x.fillRect(cx-bw/2,a.Y(acc+v),bw,a.Y(acc)-a.Y(acc+v));acc+=v});
-    g.x.fillStyle='#8b92a1';g.x.fillText(w.week.slice(5),cx-14,g.h-4)})}
+    g.x.fillStyle=T.mute;g.x.fillText(w.week.slice(5),cx-14,g.h-4)})}
 function scatter(id,jobs){const g=cv(id),p=jobs.filter(j=>+j.est_min>0&&+j.actual_min>0);if(!p.length)return empty(g);
   const mx=niceMax(Math.max(...p.map(j=>Math.max(+j.est_min,+j.actual_min)))),a=axes(g,0,mx,0,mx),x=g.x;
-  x.strokeStyle='#8b92a1';x.setLineDash([4,4]);x.beginPath();x.moveTo(a.X(0),a.Y(0));x.lineTo(a.X(mx),a.Y(mx));x.stroke();x.setLineDash([]);
+  x.strokeStyle=T.mute;x.setLineDash([4,4]);x.beginPath();x.moveTo(a.X(0),a.Y(0));x.lineTo(a.X(mx),a.Y(mx));x.stroke();x.setLineDash([]);
   p.forEach(j=>{x.fillStyle=COL[j.status]||COL.acc;x.beginPath();x.arc(a.X(+j.est_min),a.Y(+j.actual_min),4,0,7);x.fill()});
-  x.fillStyle='#8b92a1';x.fillText('estimated min',g.w/2-30,g.h-4)}
+  x.fillStyle=T.mute;x.fillText('estimated min',g.w/2-30,g.h-4)}
 function dates(rows,key){return rows.map(r=>new Date((r[key]||'').replace(' ','T')).getTime()).map(t=>isNaN(t)?0:t)}
 function rating(id,jobs){const g=cv(id),p=jobs.filter(j=>+j.rating>0);if(!p.length)return empty(g,'no ratings yet: p3d rate 1-5');
   const t=dates(p,'date'),t0=Math.min(...t),t1=Math.max(...t,t0+864e5),a=axes(g,t0,t1,0,5),x=g.x;
@@ -165,18 +191,18 @@ function mesh(id,m){const g=cv(id);if(!m.length)return empty(g);
   [[.3,COL.done],[.6,COL.cancelled]].forEach(([v,c])=>{x.strokeStyle=c;x.setLineDash([5,4]);x.beginPath();x.moveTo(a.L,a.Y(v));x.lineTo(g.w-6,a.Y(v));x.stroke();x.setLineDash([])});
   x.strokeStyle=COL.acc;x.lineWidth=2;x.beginPath();m.forEach((r,i)=>{i?x.lineTo(a.X(t[i]),a.Y(r.span)):x.moveTo(a.X(t[i]),a.Y(r.span))});x.stroke();
   m.forEach((r,i)=>{x.fillStyle=COL.acc;x.beginPath();x.arc(a.X(t[i]),a.Y(r.span),3,0,7);x.fill()});
-  x.fillStyle='#8b92a1';x.fillText(m[0].date.slice(5,10),a.L,g.h-4);x.fillText(m[m.length-1].date.slice(5,10),g.w-40,g.h-4)}
+  x.fillStyle=T.mute;x.fillText(m[0].date.slice(5,10),a.L,g.h-4);x.fillText(m[m.length-1].date.slice(5,10),g.w-40,g.h-4)}
 function hbars(id,obj){const g=cv(id),e=Object.entries(obj).sort((a,b)=>b[1]-a[1]);if(!e.length)return empty(g,'no issues tagged yet');
   const mx=Math.max(...e.map(v=>v[1])),rh=Math.min(24,(g.h-6)/e.length),x=g.x;
-  e.forEach(([k,v],i)=>{const y=4+i*rh;x.fillStyle='#8b92a1';x.fillText(k,2,y+rh*.65);x.fillStyle=COL.cancelled;x.fillRect(100,y+2,(g.w-130)*v/mx,rh-5);x.fillStyle='#e8eaf0';x.fillText(v,104+(g.w-130)*v/mx,y+rh*.65)})}
+  e.forEach(([k,v],i)=>{const y=4+i*rh;x.fillStyle=T.mute;x.fillText(k,2,y+rh*.65);x.fillStyle=COL.cancelled;x.fillRect(100,y+2,(g.w-130)*v/mx,rh-5);x.fillStyle=T.fg;x.fillText(v,104+(g.w-130)*v/mx,y+rh*.65)})}
 async function showJob(f,btn){document.querySelectorAll('#jobs button').forEach(b=>b.classList.toggle('on',b===btn));
   const g=cv('c-job');let rows;try{rows=await (await fetch('/api/print/'+encodeURIComponent(f.split('/').pop()),{cache:'no-store'})).json()}catch(e){return empty(g,'samples not available')}
   if(rows.length<2)return empty(g,'too few samples');
   const t1=Math.max(...rows.map(r=>r.elapsed_min),1),vals=rows.flatMap(r=>[r.nozzle,r.bed,r.nozzle_target,r.bed_target]).filter(v=>v!=null),
     y1=Math.max(...vals,60)+10,a=axes(g,0,t1,0,y1,{right:30}),x=g.x,line=(k,c,d,Y,w)=>{x.beginPath();x.strokeStyle=c;x.lineWidth=w;x.setLineDash(d?[4,4]:[]);let m=0;
       rows.forEach(r=>{if(r[k]==null)return;m?x.lineTo(a.X(r.elapsed_min),Y(r[k])):x.moveTo(a.X(r.elapsed_min),Y(r[k]));m=1});x.stroke();x.setLineDash([])};
-  line('nozzle_target','#ff7a4577',1,a.Y,1);line('bed_target','#4ea1ff77',1,a.Y,1);line('nozzle',COL.noz,0,a.Y,2);line('bed',COL.acc,0,a.Y,2);
-  line('progress',COL.done,0,v=>a.Y(v/100*y1),1.5);x.fillStyle='#8b92a1';x.fillText('100%',g.w-28,a.Y(y1)+10);x.fillText(Math.round(t1)+' min',g.w-50,g.h-4);
+  line('nozzle_target',COL.noz+'77',1,a.Y,1);line('bed_target',COL.acc+'77',1,a.Y,1);line('nozzle',COL.noz,0,a.Y,2);line('bed',COL.acc,0,a.Y,2);
+  line('progress',COL.done,0,v=>a.Y(v/100*y1),1.5);x.fillStyle=T.mute;x.fillText('100%',g.w-28,a.Y(y1)+10);x.fillText(Math.round(t1)+' min',g.w-50,g.h-4);
   const j=H.jobs.find(j=>j.samples_file===f)||{};$('jobinfo').textContent=[j.name,j.status,j.nozzle_set&&'nozzle '+j.nozzle_set,j.max_nozzle&&'max '+j.max_nozzle,j.min_nozzle&&'min after L1 '+j.min_nozzle,j.rating&&'rating '+j.rating,j.issues,j.notes].filter(Boolean).join(' · ')}
 function drawHist(){if(!H)return;bars('c-weeks',H.weeks,['done','cancelled','failed'],[COL.done,COL.cancelled,COL.failed]);
   const gw=H.weeks.map(w=>({week:w.week,g:w.grams}));bars('c-grams',gw,['g'],[COL.acc]);scatter('c-est',H.jobs);rating('c-rate',H.jobs);mesh('c-mesh',H.mesh);hbars('c-issues',H.issues)}
@@ -188,6 +214,50 @@ async function loadHist(){try{H=await (await fetch('/api/history',{cache:'no-sto
   $('cal').innerHTML=H.calibration.map(c=>`<div><span>${esc(c.what)}</span>${esc(c.value)}</div>`).join('')||'–';
   drawHist();if(first)first.click();else empty(cv('c-job'),'no per-print samples yet (recorded from the next print)')}
 const esc=s=>String(s).replace(/[<>&]/g,'');
-addEventListener('resize',()=>{if(curTab==='hist'){drawHist()}});
-tick();logs();setInterval(tick,3000);setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
+addEventListener('resize',()=>{if(curTab==='hist'){drawHist()}else if(curTab==='stats'&&ST){drawStats()}});
+
+// ---- controls, queue ----
+async function post(url,msgId,body){const m=$(msgId);m.textContent='...';
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})}),j=await r.json();
+    m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done');
+    tick();queueLoad();return j}catch(e){m.textContent='failed: '+e;return{}}}
+async function queueLoad(){try{const q=await (await fetch('/api/queue',{cache:'no-store'})).json();
+  $('queue').innerHTML=q.map(e=>`<div class="idea"><span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
+// ---- stats ----
+let ST=null;
+function lines(id,labels,series){const g=cv(id);if(!labels.length)return empty(g,'no printed jobs yet');
+  const a=axes(g,0,Math.max(labels.length-1,1),0,100,{right:30}),x=g.x;
+  series.forEach(s=>{x.strokeStyle=s.col;x.lineWidth=2;x.beginPath();let m=0;s.v.forEach((v,i)=>{if(v==null)return;const px=a.X(i),py=a.Y(v*s.k);m?x.lineTo(px,py):x.moveTo(px,py);m=1});x.stroke();
+    s.v.forEach((v,i)=>{if(v==null)return;x.fillStyle=s.col;x.beginPath();x.arc(a.X(i),a.Y(v*s.k),3.5,0,7);x.fill()})});
+  x.fillStyle=T.mute;[0,1,2,3,4,5].forEach(r=>x.fillText(r,g.w-22,a.Y(r*20)+4));
+  const step=Math.ceil(labels.length/6);labels.forEach((l,i)=>{if(i%step===0)x.fillText(l.slice(5),a.X(i)-10,g.h-4)})}
+function spoolBars(id,sp){const g=cv(id);if(!sp.length)return empty(g,'no spools: p3d spool add');
+  const rh=Math.min(34,(g.h-6)/sp.length),x=g.x;
+  sp.forEach((s,i)=>{const y=4+i*rh,w=g.w-150,f=Math.max(0,Math.min(1,s.left_g/(s.start_g||1)));
+    x.fillStyle=T.mute;x.fillText(s.name.slice(0,14),2,y+rh*.62);x.fillStyle=T.line;x.fillRect(100,y+3,w,rh-8);
+    x.fillStyle=s.left_g<100?COL.cancelled:COL.acc;x.fillRect(100,y+3,w*f,rh-8);x.fillStyle=T.fg;x.fillText(Math.round(s.left_g)+' g',104+w,y+rh*.62)})}
+function timeline(id,jobs,changes){const g=cv(id);if(!jobs.length)return empty(g);
+  const a=axes(g,0,Math.max(jobs.length-1,1),0,5),x=g.x;
+  changes.forEach((c,k)=>{const i=jobs.findIndex(j=>j.date===c.date&&j.name===c.name);if(i<0)return;
+    x.strokeStyle=COL.acc;x.setLineDash([4,3]);x.beginPath();x.moveTo(a.X(i),a.Y(0));x.lineTo(a.X(i),a.Y(5));x.stroke();x.setLineDash([]);x.fillStyle=COL.acc;x.fillText(k+1,a.X(i)+3,a.Y(5)+10)});
+  jobs.forEach((j,i)=>{x.fillStyle=COL[j.status]||COL.acc;x.beginPath();x.arc(a.X(i),a.Y(+j.rating||0.4),4,0,7);x.fill()});
+  x.fillStyle=T.mute;x.fillText('job order (height = rating, bottom = unrated)',a.L,g.h-4)}
+function drawStats(){const w=ST.weeks;
+  lines('s-succ',w.map(x=>x.week),[{v:w.map(x=>x.success),col:COL.done,k:1},{v:w.map(x=>x.rating),col:COL.acc,k:20}]);
+  hbars('s-issues',ST.issues);spoolBars('s-spools',ST.spools);
+  bars('s-grams',w.map(x=>({week:x.week,g:x.grams})),['g'],[COL.acc]);bars('s-hours',w.map(x=>({week:x.week,h:x.hours})),['h'],[COL.noz]);
+  timeline('s-tl',ST.jobs,ST.changes)}
+async function loadStats(){try{ST=await (await fetch('/api/stats',{cache:'no-store'})).json()}catch(e){return}
+  drawStats();
+  $('s-chg').innerHTML=ST.changes.map((c,i)=>`<div><b>${i+1}.</b> ${esc(c.date.slice(0,10))} ${esc(c.changes.join('; '))}</div>`).join('')||'no settings changes recorded yet (each job stores its settings)';
+  const sc=ST.since_change;$('s-rec').innerHTML=(sc?`<div>Since the last change (${esc(sc.date.slice(0,10))}): issues per rated job ${sc.before} before, ${sc.after} after.</div>`:'')+
+    ST.recurring.map(r=>`<div><b>${esc(r.tag)}</b> x${r.n}: ${esc(r.advice)}</div>`).join('')}
+// ---- ideas ----
+async function loadIdeas(){let j;try{j=await (await fetch('/api/ideas',{cache:'no-store'})).json()}catch(e){return}
+  $('i-status').innerHTML=j.statuses.map(s=>`<option>${s}</option>`).join('');
+  $('i-list').innerHTML=j.statuses.map(st=>{const it=j.items.filter(i=>i.status===st);return it.length?`<div class="lab" style="margin-top:10px">${st}</div>`+it.map(i=>
+    `<div class="idea"><span>#${i.id} ${esc(i.text)}${i.job?' <small>['+esc(i.job)+']</small>':''}</span><select onchange="moveIdea(${i.id},this.value)">${j.statuses.map(s=>`<option${s===i.status?' selected':''}>${s}</option>`).join('')}</select></div>`).join(''):''}).join('')||'no ideas yet'}
+async function addIdea(){const t=$('i-text').value.trim();if(!t)return;const j=await post('/api/ideas','m-i',{action:'add',text:t,status:$('i-status').value});if(j.ok){$('i-text').value='';loadIdeas()}}
+async function moveIdea(id,st){await post('/api/ideas','m-i',{action:'move',id:id,status:st});loadIdeas()}
+tick();logs();queueLoad();setInterval(queueLoad,10000);setInterval(tick,3000);if(['hist','stats','ideas'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

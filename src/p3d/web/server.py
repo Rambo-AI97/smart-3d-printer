@@ -1,9 +1,9 @@
-"""Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except POST /api/cancel
-(safe stop, allowed from localhost and config `cancel_from` IPs only)."""
+"""Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except the POST endpoints
+(cancel, pause, resume, queue/next, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
 import csv, json, pathlib, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import config, printlog
+from .. import config, ideas, insights, pause, printlog, runner, spools
 
 PAGE = pathlib.Path(__file__).resolve().parent / "index.html"
 DATA = config.get().data
@@ -11,7 +11,7 @@ DATA = config.get().data
 
 def read_state():
     s = config.read_state()
-    if s.get("status") == "printing" and not config.print_running():
+    if s.get("status") in ("printing", "paused") and not config.print_running():
         s["stale"] = True  # sender died without a final state
     return s
 
@@ -91,6 +91,20 @@ def history():
             "stats": stats[-1] if stats else None, "calibration": calibration()}
 
 
+def stats():
+    rows = read_csv("print_log.csv")
+    sp = spools.load()
+    return {"weeks": insights.weekly(rows), "issues": insights.issue_counts(rows), "changes": insights.settings_changes(rows),
+            "recurring": [{"tag": t, "n": n, "advice": a} for t, n, a in insights.recurring(rows)],
+            "since_change": insights.since_last_change(rows), "spools": sp["spools"], "active": sp["active"],
+            "jobs": [{k: r.get(k, "") for k in ("date", "name", "status", "rating", "profile_hash", "bed_first", "bed_other")}
+                     for r in insights.printed(rows)]}
+
+
+def queue_view():
+    return [{"n": n, "name": e.get("name"), "note": e.get("note", "")} for n, e in enumerate(runner.q_load(), 1)]
+
+
 class H(BaseHTTPRequestHandler):
     def send(self, body, ctype, code=200):
         self.send_response(code)
@@ -133,26 +147,68 @@ class H(BaseHTTPRequestHandler):
             except Exception:
                 return self.send(b"not found", "text/plain", 404)
             self.send(json.dumps(rows).encode(), "application/json")
+        elif path == "/api/stats":
+            self.send(json.dumps(stats()).encode(), "application/json")
+        elif path == "/api/ideas":
+            self.send(json.dumps({"statuses": ideas.STATUSES, "items": ideas.load()}).encode(), "application/json")
+        elif path == "/api/queue":
+            self.send(json.dumps(queue_view()).encode(), "application/json")
         elif path == "/api/log":
             self.send(json.dumps(log_rows()).encode(), "application/json")
         else:
             self.send(b"not found", "text/plain", 404)
 
+    def reply(self, obj, code=200):
+        self.send(json.dumps(obj).encode(), "application/json", code)
+
+    def body(self):
+        try:
+            return json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
+        except Exception:
+            return {}
+
     def do_POST(self):
-        if self.path.split("?")[0] != "/api/cancel":
+        path = self.path.split("?")[0]
+        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/ideas"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
-        if ip not in ("127.0.0.1", "::1", *config.get().cancel_from):
-            return self.send(json.dumps({"error": "forbidden"}).encode(), "application/json", 403)
+        c = config.get()
+        allowed = ("127.0.0.1", "::1", *c.cancel_from) if path == "/api/cancel" else c.control_ips
+        if ip not in allowed:
+            return self.reply({"error": "forbidden"}, 403)
         try:
-            if not config.print_cancellable():
-                return self.send(json.dumps({"ok": "nothing to stop"}).encode(), "application/json")
-            c = config.get()
-            c.state_dir.mkdir(parents=True, exist_ok=True)
-            c.stop.touch()  # same as `p3d cancel`: the sender turns heaters off, lifts, parks, logs it
-            self.send(json.dumps({"ok": "cancel requested"}).encode(), "application/json")
+            if path == "/api/cancel":
+                if not config.print_cancellable():
+                    return self.reply({"ok": "nothing to stop"})
+                c.state_dir.mkdir(parents=True, exist_ok=True)
+                c.stop.touch()  # same as `p3d cancel`: the sender turns heaters off, lifts, parks, logs it
+                return self.reply({"ok": "cancel requested"})
+            if path == "/api/pause":
+                if not config.print_cancellable():
+                    return self.reply({"ok": "nothing to pause"})
+                return self.reply({"ok": pause.request_pause()})
+            if path == "/api/resume":
+                return self.reply({"ok": pause.request_resume()})
+            if path == "/api/queue/next":
+                try:
+                    return self.reply({"ok": runner.queue_next(notify=True)})
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            b = self.body()  # /api/ideas
+            items = ideas.load()
+            try:
+                if b.get("action") == "add":
+                    ideas.add(items, str(b.get("text", "")), b.get("status") or "idea", b.get("tags") or [])
+                elif b.get("action") == "move":
+                    ideas.move(items, b.get("id"), b.get("status"))
+                else:
+                    return self.reply({"error": "action: add | move"}, 400)
+            except ValueError as e:
+                return self.reply({"error": str(e)}, 400)
+            ideas.save(items)
+            self.reply({"ok": "saved", "items": items})
         except Exception as e:
-            self.send(json.dumps({"error": str(e)}).encode(), "application/json", 500)
+            self.reply({"error": str(e)}, 500)
 
     def log_message(self, *a):
         pass
