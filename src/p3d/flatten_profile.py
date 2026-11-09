@@ -22,6 +22,21 @@ FILAMENTS = {
     "petg": "Creality Generic PETG @Ender-3V3-all",
 }
 
+PLATES = ("cool", "eng", "hot", "textured", "supertack")  # Orca's bed-plate variants: set all so the plate type never matters
+
+
+def bed_step_down(first, rest):
+    """Orca bed temps: `first` for layer 1 (grip), `rest` after it (never off). Orca emits the M140 at layer 2."""
+    d = {}
+    for p in PLATES:
+        d[f"{p}_plate_temp_initial_layer"] = [str(first)]
+        d[f"{p}_plate_temp"] = [str(rest)]
+    return d
+
+
+# Bed step-down per material: (first layer, other layers). 2026-11-09: PETG sticks at 70 but 60 holds it and warps/ stresses less.
+BED = {"petg": (70, 60), "pla": (60, 55)}
+
 # Our calibration results, applied on top of the system presets (date: test that set it).
 CALIBRATED = {
     "petg": {
@@ -32,7 +47,9 @@ CALIBRATED = {
         "filament_z_hop": ["0.2"],                    # 0.4 normal lift pulled strings up between masts/posts
         "filament_z_hop_types": ["Spiral Lift"],
         "filament_wipe": ["1"],
+        **bed_step_down(*BED["petg"]),
     },
+    "pla": bed_step_down(*BED["pla"]),
 }
 
 # Applied to every process (draft/standard/fine). Date: print that set it.
