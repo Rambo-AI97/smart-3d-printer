@@ -8,7 +8,7 @@ import subprocess
 import sys
 import time
 
-from . import __version__, config
+from . import __version__, config, runner
 from .config import FINAL, print_running, read_state
 
 
@@ -49,41 +49,63 @@ def cmd_status(a):
             print("  printer not reachable:", e)
 
 
-def service_dir():
-    return config.XDG_CONFIG / "systemd/user"
-
-
-def _start_unit(unit, args):
-    """Run `python -m p3d.sender ARGS` as a systemd user service (survives the terminal)."""
-    if (service_dir() / f"{unit}.service").exists():
-        subprocess.run(["systemctl", "--user", "reset-failed", unit], capture_output=True)
-        subprocess.run(["systemctl", "--user", "start", "--no-block", unit], check=True)
-        return
-    from .service import exec_line
-    subprocess.run(["systemd-run", "--user", f"--unit={unit}", "--collect", *exec_line(args, split=True)], check=True)
+service_dir = runner.service_dir
+_start_unit = runner.start_unit
 
 
 def cmd_print(a):
-    c = cfg()
-    g = pathlib.Path(a.gcode).expanduser().resolve()
-    if g.is_dir():
-        g = next(g.glob("*.gcode"), g)
-    if g.suffix != ".gcode" or not g.exists():
-        sys.exit(f"not a G-code file: {g}")
-    if print_running():
-        sys.exit("a print is already running (p3d status)")
-    c.stop.unlink(missing_ok=True)
     try:
-        from . import preview
-        preview.for_job(g.parent)
-    except Exception:
-        pass
-    c.state_dir.mkdir(parents=True, exist_ok=True)
-    c.queue.write_text(str(g))
-    config.write_state(status="queued", file=g.stem, job_id=g.parent.name, job_dir=str(g.parent),
-                       queued_at=time.strftime("%Y-%m-%dT%H:%M:%S"))
-    _start_unit("p3d-print", ["--queued"])
-    print(f"started: {g.name}  (job {g.parent.name}; p3d status / p3d wait done / p3d cancel)")
+        print(runner.start(a.gcode, force=a.force, pause_at=a.pause_at_layer or [], confirm_z=a.confirm_z))
+    except runner.Refuse as e:
+        sys.exit(str(e))
+
+
+def cmd_pause(a):
+    from . import pause
+    if not config.print_cancellable():
+        sys.exit("no print running")
+    if a.at_layer:
+        print(pause.request_pause(a.at_layer))
+    elif read_state().get("status") == "paused":
+        print("already paused (p3d resume)")
+    else:
+        print(pause.request_pause())
+
+
+def cmd_resume(_):
+    from . import pause
+    print(pause.request_resume())
+
+
+def cmd_spool(a):
+    from . import spools
+    if a.action == "set" and a.amount is not None:
+        a.grams = a.amount
+    spools.cmd(a)
+
+
+def cmd_queue(a):
+    runner.cmd_queue(a)
+
+
+def cmd_idea(a):
+    from . import ideas
+    ideas.cmd(a)
+
+
+def cmd_recover(a):
+    from . import recover
+    recover.cmd_recover(a)
+
+
+def cmd_addon(a):
+    from . import recover
+    recover.cmd_addon(a)
+
+
+def cmd_suggest(_):
+    from . import printlog
+    printlog.cmd_suggest()
 
 
 def cmd_cancel(_):
@@ -157,12 +179,11 @@ def _need(tool, path):
     return path
 
 
-def cmd_slice(a):
+def slice_model(model, quality="standard", filament="petg", supports=False, brim=False, walls=None, infill=None,
+                keep_orient=False, proc_extra=None, tag=""):
+    """Orca CLI slice into a new job dir. Returns (job_dir, final_gcode, info dict). Exits on failure."""
     c = cfg()
     orca = _need("Orca Slicer", c.orca)
-    model = pathlib.Path(a.model).expanduser().resolve()
-    if not model.exists():
-        sys.exit(f"no such model: {model}")
     stamp = time.strftime("%Y%m%d-%H%M")
     out = c.jobs / f"{stamp}-{re.sub(r'[^A-Za-z0-9]+', '_', model.stem)}"
     n = 2
@@ -171,22 +192,23 @@ def cmd_slice(a):
         n += 1
     out.mkdir(parents=True)
     prof = c.profiles
-    proc = json.load(open(prof / f"process-{a.quality}.json"))
-    if a.supports:
+    proc = json.load(open(prof / f"process-{quality}.json"))
+    if supports:
         proc["enable_support"] = "1"
-    if a.brim:
+    if brim:
         proc["brim_type"] = "outer_only"
-    if a.walls:  # strong parts: more perimeters matter more than infill
-        proc["wall_loops"] = str(a.walls)
-        proc["top_shell_layers"] = proc["bottom_shell_layers"] = str(max(5, a.walls))
-    if a.infill:
-        proc["sparse_infill_density"] = f"{a.infill}%"
+    if walls:  # strong parts: more perimeters matter more than infill
+        proc["wall_loops"] = str(walls)
+        proc["top_shell_layers"] = proc["bottom_shell_layers"] = str(max(5, walls))
+    if infill:
+        proc["sparse_infill_density"] = f"{infill}%"
         proc["sparse_infill_pattern"] = "gyroid"
+    proc.update(proc_extra or {})
     pj = out / "process.json"
     pj.write_text(json.dumps(proc))
-    cmd = [orca, "--slice", "0", "--arrange", "1", "--orient", "0" if a.keep_orient else "1",
+    cmd = [orca, "--slice", "0", "--arrange", "1", "--orient", "0" if keep_orient else "1",
            "--load-settings", f"{prof}/machine.json;{pj}",
-           "--load-filaments", f"{prof}/filament-{a.filament}.json",
+           "--load-filaments", f"{prof}/filament-{filament}.json",
            "--outputdir", str(out), str(model)]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -196,7 +218,7 @@ def cmd_slice(a):
     g = next(out.glob("*.gcode"), None)
     if res.get("return_code") != 0 or not g:
         sys.exit(f"slice failed: {res.get('error_string')}")
-    final = out / f"{model.stem}.gcode"
+    final = out / f"{model.stem}{'_' + tag if tag else ''}.gcode"
     g.rename(final)
     info = {}
     for line in open(final, errors="replace"):
@@ -212,10 +234,22 @@ def cmd_slice(a):
         preview.make(model, out / "preview.png")
     except Exception:
         pass
+    return out, final, info
+
+
+def cmd_slice(a):
+    model = pathlib.Path(a.model).expanduser().resolve()
+    if not model.exists():
+        sys.exit(f"no such model: {model}")
+    out, final, info = slice_model(model, a.quality, a.filament, a.supports, a.brim, a.walls, a.infill, a.keep_orient)
     print(final)
     print(f"time {info.get('estimated printing time (normal mode)')}, "
           f"{info.get('total filament used [g]')} g, layer {info.get('layer_height')} mm, "
           f"nozzle {info.get('nozzle_temperature')} / bed {info.get('bed_temperature')} C")
+    from . import spools
+    ok, msg = spools.check(spools.load(), info.get("total filament used [g]"))
+    if msg:
+        print("spool:", msg)
 
 
 def _scad_src(name):
@@ -434,10 +468,13 @@ def cmd_history(_):
     printlog.cmd_history()
 
 
-def cmd_stats(_):
-    _idle_port()
+def cmd_stats(a):
     from . import printlog
-    printlog.cmd_stats()
+    if a.printer:
+        _idle_port()
+        printlog.cmd_stats()
+    else:
+        printlog.cmd_summary()
 
 
 def cmd_import(_):
@@ -476,8 +513,18 @@ COMMANDS = {
         ("status", cmd_status, "current job, progress and temperatures",
          [A("--json", action="store_true", help="machine-readable {running, stale, state}, nothing else")]),
         ("print", cmd_print, "start printing a G-code file in the background",
-         [A("gcode", help="FILE.gcode or a job folder")]),
+         [A("gcode", help="FILE.gcode or a job folder"),
+          A("--force", action="store_true", help="print even if the active spool has too little filament"),
+          A("--pause-at-layer", type=int, action="append", metavar="N", help="pause before layer N (magnets, colour swap); repeat"),
+          A("--confirm-z", action="store_true", help="recover/add-on job: I put the nozzle on the part top (manual Z)")]),
+        ("pause", cmd_pause, "pause at the next layer change (park, keep heaters); --at-layer N for a chosen layer",
+         [A("--at-layer", type=int, action="append", metavar="N")]),
+        ("resume", cmd_resume, "continue a paused print", []),
         ("cancel", cmd_cancel, "safe stop: heaters off, lift, park", []),
+        ("queue", cmd_queue, "approved jobs: add JOB | list | remove N | next (starts the head; bed must be clear)",
+         [A("action", choices=["add", "list", "remove", "next"], nargs="?", default="list"), A("arg", nargs="?"),
+          A("--note"), A("--force", action="store_true", help="next: ignore the spool check"),
+          A("--notify", action="store_true", help="next: desktop notification with the result")]),
         ("wait", cmd_wait, "block until the current job's first layer or its end (exit 0 = done)",
          [A("until", choices=["layer", "done"]), A("--job", help="job id (default: the current one)"),
           A("--interval", type=float, default=5, help=argparse.SUPPRESS),
@@ -502,6 +549,14 @@ COMMANDS = {
           A("--thicken", type=float), A("--voxel", type=float)]),
         ("game", cmd_game, "Godot game model by preset -> STL (~/.config/p3d/presets.json)",
          [A("name"), A("--length", type=float)]),
+        ("recover", cmd_recover, "continue a failed/cancelled print from its last good layer (writes a job, never prints)",
+         [A("job", help="job folder / id"), A("--from-layer", type=int, help="last GOOD layer (default: recorded)"),
+          A("--z", type=float, help="top height of the last good layer, mm")]),
+        ("addon", cmd_addon, "slice MODEL to print ON TOP of a part at height --on-z (writes a job, never prints)",
+         [A("model"), A("--on-z", type=float, required=True, help="top height of the existing part, mm"),
+          A("--x", type=float, default=0.0, help="shift from the bed centre, mm"), A("--y", type=float, default=0.0),
+          A("--part-bbox", help="X0,Y0,X1,Y1 of the existing part: allows automatic homing if it is clear of the Z probe point"),
+          QUAL, FIL]),
         ("inspect", cmd_inspect, "G-code breakdown: time, grams, feature share, supports", [A("gcode")]),
         ("pack", cmd_pack, "Printables upload pack: STL, .scad, render, pack.json",
          [A("model"), A("--part"), A("--dir", help="folder name (default: model with - for _)")]),
@@ -525,7 +580,16 @@ COMMANDS = {
         ("rate", cmd_rate, "rate the last print 1-5 with issue tags and a note (no args: show it)",
          [A("rating", nargs="?", type=int), A("--issues", help="comma list, e.g. stringing,adhesion"),
           A("--note"), A("--job", help="job name instead of the last one")]),
-        ("stats", cmd_stats, "save the printer's lifetime counters (M78)", []),
+        ("suggest", cmd_suggest, "recurring issues in the last 10 jobs with the suggested fix", []),
+        ("stats", cmd_stats, "success, rating, grams, hours per week; issues; settings changes (--printer: save M78 counters)",
+         [A("--printer", action="store_true")]),
+        ("spool", cmd_spool, "filament spools: add NAME --material --grams | list | use NAME | set NAME GRAMS",
+         [A("action", choices=["add", "list", "use", "set"], nargs="?", default="list"), A("name", nargs="?"),
+          A("amount", nargs="?", type=float, help="set: grams left after weighing"),
+          A("--material"), A("--grams", type=float), A("--color")]),
+        ("idea", cmd_idea, "print ideas board (ideas.md): add TEXT | list | move ID STATUS | done ID --job NAME",
+         [A("action", choices=["add", "list", "move", "done"], nargs="?", default="list"), A("args", nargs="*"),
+          A("--status"), A("--tag", action="append"), A("--job")]),
         ("import-history", cmd_import, "add past G-code files found on this PC to the log", []),
     ],
     "Setup": [

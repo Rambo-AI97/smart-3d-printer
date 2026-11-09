@@ -3,7 +3,7 @@
   p3d import-history   add past G-code files found on this PC (sliced jobs)
   p3d stats            snapshot the printer's lifetime counters (M78)
 """
-import csv, datetime, json, os, pathlib, re, sys, time
+import csv, datetime, hashlib, json, os, pathlib, re, sys, time
 
 from . import config
 
@@ -21,10 +21,16 @@ def stats_file():
 FIELDS = ["date", "name", "status", "est_min", "actual_min", "grams", "filament", "layer_mm", "nozzle_mm", "source", "file",
           # added 2026-11-06 (older rows leave these empty)
           "started", "ended", "nozzle_set", "bed_set", "flow_ratio", "retraction_mm", "quality", "outer_speed",
-          "max_nozzle", "min_nozzle", "avg_bed", "layers", "samples_file", "rating", "issues", "notes", "model"]
+          "max_nozzle", "min_nozzle", "avg_bed", "layers", "samples_file", "rating", "issues", "notes", "model",
+          # added 2026-11-09: spool + settings snapshot per job (for p3d stats / the dashboard settings timeline)
+          "spool", "grams_used", "nozzle_first", "bed_first", "bed_other", "inner_speed", "travel_speed", "walls", "infill",
+          "infill_pattern", "profile_hash"]
 ISSUES = ["stringing", "adhesion", "warping", "layer-shift", "blobs", "under-extrusion", "over-extrusion",
           "supports", "first-layer", "spaghetti", "other"]
 PRINTED = ("done", "failed", "cancelled")
+PLATES = ("cool", "eng", "hot", "textured", "supertack")
+PLATE_OF = {"Cool Plate": "cool", "Engineering Plate": "eng", "High Temp Plate": "hot", "Smooth PEI Plate": "hot",
+            "Textured PEI Plate": "textured", "Supertack Plate": "supertack"}
 SEARCH = [pathlib.Path.home() / "Downloads", pathlib.Path.home() / ".config/OrcaSlicer/log"]
 
 
@@ -41,17 +47,38 @@ def gcode_info(path):
             "nozzle_diameter": "nozzle", "TIME": "est_s", "Filament used": "metres",
             "nozzle_temperature": "nozzle_set", "nozzle_temperature_initial_layer": "nozzle_first",
             "hot_plate_temp": "bed_hot", "textured_plate_temp": "bed_tex", "filament_flow_ratio": "flow",
-            "retraction_length": "retract", "outer_wall_speed": "outer_speed", "total layer number": "layers"}
+            "retraction_length": "retract", "outer_wall_speed": "outer_speed", "total layer number": "layers",
+            "inner_wall_speed": "inner_speed", "travel_speed": "travel", "wall_loops": "walls",
+            "sparse_infill_density": "infill", "sparse_infill_pattern": "infill_pattern", "curr_bed_type": "bed_type",
+            **{f"{p}_plate_temp": f"t_{p}" for p in PLATES}, **{f"{p}_plate_temp_initial_layer": f"t1_{p}" for p in PLATES}}
+    sha, in_cfg, hashed = hashlib.sha1(), False, False
     with open(path, errors="replace") as f:
         for line in f:
+            if line.startswith("; CONFIG_BLOCK_START"):
+                in_cfg = True
+            elif line.startswith("; CONFIG_BLOCK_END"):
+                in_cfg = False
+            elif in_cfg and "filename" not in line and "_gcode" not in line:
+                sha.update(line.encode())
+                hashed = True
             m = re.match(r";\s*([^=:]+?)\s*[=:]\s*(.*)", line)
             if m and m.group(1) in keys:
                 info.setdefault(keys[m.group(1)], m.group(2).strip())
     est = to_min(info.get("est")) if "est" in info else (round(int(info["est_s"]) / 60, 1) if info.get("est_s", "").isdigit() else "")
     first = lambda k: re.split(r"[;,]", info.get(k, ""))[0].strip()
+    plate = PLATE_OF.get(info.get("bed_type", ""), "")
+    bed_first, bed_other = first(f"t1_{plate}") if plate else "", first(f"t_{plate}") if plate else ""
+    return {"nozzle_first": first("nozzle_first"), "bed_first": bed_first or first("bed_hot") or first("bed_tex"),
+            "bed_other": bed_other or first("bed_hot") or first("bed_tex"), "inner_speed": first("inner_speed"),
+            "travel_speed": first("travel"), "walls": first("walls"), "infill": first("infill"),
+            "infill_pattern": first("infill_pattern"), "profile_hash": sha.hexdigest()[:8] if hashed else "",
+            **_base(info, est, first, bed_first or first("bed_hot") or first("bed_tex"))}
+
+
+def _base(info, est, first, bed_set):
     return {"est_min": est, "grams": info.get("grams", ""), "filament": info.get("filament", "").split(";")[0],
             "layer_mm": info.get("layer", ""), "nozzle_mm": info.get("nozzle", "").split(",")[0],
-            "nozzle_set": first("nozzle_set"), "bed_set": first("bed_hot") or first("bed_tex"),
+            "nozzle_set": first("nozzle_set"), "bed_set": bed_set,
             "flow_ratio": first("flow"), "retraction_mm": first("retract"), "outer_speed": first("outer_speed"),
             "layers": first("layers")}
 
@@ -155,6 +182,9 @@ def cmd_rate(rating=None, issues=None, note=None, job=None):
             last = r
     write_all(all_rows)
     print(f"rated {last['name']}: rating={last.get('rating') or '-'} issues={last.get('issues') or '-'} notes={last.get('notes') or '-'}")
+    from . import insights
+    for t, step in insights.next_steps([x for x in (last.get("issues") or "").split(",") if x]):
+        print(f"  next step for {t}: {step}")
 
 
 def cmd_history():
@@ -175,6 +205,21 @@ def cmd_history():
     for r in pr[-5:]:
         print(f"  {r['date'][:16]}  {r['status']:9} {r['name'][:30]:30} {r['actual_min'] or '-':>5} min  "
               f"rating {r.get('rating') or '-'}  {r.get('issues') or ''}")
+
+
+    from . import insights
+    for t, n, adv in insights.recurring(rows()):
+        print(f"  recurring: {t} x{n} in the last 10 jobs -> {adv}")
+
+
+def cmd_suggest():
+    from . import insights
+    insights.cmd_suggest(rows())
+
+
+def cmd_summary():
+    from . import insights
+    insights.cmd_stats(rows())
 
 
 def cmd_import():

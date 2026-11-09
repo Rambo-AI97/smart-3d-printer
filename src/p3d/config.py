@@ -36,6 +36,10 @@ DEFAULTS = {
     "web_port": 8765,
     "web_host": "0.0.0.0",
     "cancel_from": [],       # extra IPs allowed to POST /api/cancel (localhost always is), e.g. a home server
+    "control_from": [],      # extra IPs allowed to POST the other control endpoints (pause, resume, queue, ideas); cancel_from counts too
+    "ideas_file": "",        # print-ideas board (Markdown, hand-editable); default <data_dir>/../ideas.md
+    "z_home_xy": [110, 110], # where the printer probes Z on G28 (bed centre on the Ender-3 V3 SE); used by recover/addon
+    "z_home_margin": 12,     # mm kept clear around that point before a recover/add-on may use G28
     "park_y": 220,           # Y to park at on cancel (bed depth)
 }
 
@@ -91,12 +95,42 @@ class Config:
         return self.state_dir / "state.json"
 
     @property
+    def queue(self):
+        return self.state_dir / "next_job"
+
+    @property
     def stop(self):
         return self.state_dir / "STOP"
 
     @property
-    def queue(self):
-        return self.state_dir / "next_job"
+    def pause(self):
+        """Touch = pause at the next layer change; PAUSE_AT holds layer numbers to pause before; RESUME ends a pause."""
+        return self.state_dir / "PAUSE"
+
+    @property
+    def resume(self):
+        return self.state_dir / "RESUME"
+
+    @property
+    def pause_at(self):
+        return self.state_dir / "pause_at.json"
+
+    @property
+    def spools_file(self):
+        return self.data / "spools.json"
+
+    @property
+    def queue_file(self):
+        return self.data / "print_queue.json"
+
+    @property
+    def ideas(self):
+        v = self.raw.get("ideas_file")
+        return pathlib.Path(v).expanduser() if v else self.data.parent / "ideas.md"
+
+    @property
+    def control_ips(self):
+        return ["127.0.0.1", "::1", *self.raw.get("cancel_from", []), *self.raw.get("control_from", [])]
 
     @property
     def profiles(self):
@@ -155,13 +189,15 @@ def reset():
 
 # ---------- notifications ----------
 
-def notify(title, msg, tags="printer"):
-    """ntfy push if ntfy_url is set. Never raises."""
+def notify(title, msg, tags="printer", actions=None):
+    """ntfy push if ntfy_url is set. Never raises. actions: ntfy action-button string, e.g. 'http, Resume, URL, method=POST'."""
     c = get()
     if os.environ.get("P3D_NO_NOTIFY") or not c.ntfy_url:
         return False
     req = urllib.request.Request(c.ntfy_url, data=msg.encode(), method="POST",
                                  headers={"Title": title, "Tags": tags})
+    if actions:
+        req.add_header("Actions", actions)
     if c.ntfy_token:
         req.add_header("Authorization", f"Bearer {c.ntfy_token}")
     try:
@@ -169,6 +205,26 @@ def notify(title, msg, tags="printer"):
         return True
     except Exception:
         return False
+
+
+def desktop_notify(title, msg):
+    """notify-send on this PC (best effort)."""
+    if os.environ.get("P3D_NO_NOTIFY") or not shutil.which("notify-send"):
+        return
+    try:
+        subprocess.run(["notify-send", title, msg], timeout=10, capture_output=True)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def web_base():
+    """Dashboard URL for ntfy action buttons: the Tailscale address (found at run time), else localhost."""
+    ip = ""
+    try:
+        ip = (subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=5).stdout.split() or [""])[0]
+    except (OSError, subprocess.SubprocessError):
+        pass
+    return f"http://{ip or 'localhost'}:{get().web_port}"
 
 
 # ---------- serial port access ----------
