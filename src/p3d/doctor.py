@@ -104,6 +104,9 @@ def checks():
 
     yield (OK, "ntfy", "phone alerts on") if c.ntfy_url else \
         (WARN, "ntfy", "no phone alerts (optional) -> set ntfy_url via `p3d setup`")
+    lo, hi = c.urgent_hours
+    yield OK, "loud alerts", (f"done/cool/failed/needs-you ring {lo:02d}-{hi:02d} (Priority 5, 2nd topic)" if c.urgent_ntfy_url
+                             else "off (optional) -> urgent_ntfy_url in config")
 
 
 def run(quiet=False):

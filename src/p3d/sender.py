@@ -139,10 +139,10 @@ def cooldown(link, limit_min=60):
         if n is not None and b is not None and n < COOL_NOZZLE and b < COOL_BED:
             link.run(["M107", "M84"])
             notify("Printer cool", f"nozzle {n:.0f} C, bed {b:.0f} C, motors off. Safe to switch off / remove print.",
-                   "snowflake")
+                   "snowflake", urgent=True)
             return True
         time.sleep(30)
-    notify("Printer still warm", f"after {limit_min} min: nozzle {n} C, bed {b} C", "warning")
+    notify("Printer still warm", f"after {limit_min} min: nozzle {n} C, bed {b} C", "warning", urgent=True)
     return False
 
 
@@ -176,7 +176,7 @@ def main(path):
         link = Link()
     except Exception as e:
         save(file=name, status="failed", error=f"cannot open printer: {e}", started=started, ended_at=now_iso(), **job)
-        notify("Print FAILED", f"{name}: cannot open printer: {e}", "warning")
+        notify("Print FAILED", f"{name}: cannot open printer: {e}", "warning", urgent=True)
         raise
     cur = {"z": None, "layer": None, "pct": None, "rem": None, "last": 0.0, "z_seen": set(), "status": "printing",
            "layer_done": 0, "z_done": None}
@@ -335,7 +335,7 @@ def main(path):
         run_json()
         base = config.web_base()
         notify("Print paused", f"{name} paused before layer {layer}. Resume when ready (wipe ooze off the nozzle first).", "pause_button",
-               actions=f"http, Resume, {base}/api/resume, method=POST; http, Cancel, {base}/api/cancel, method=POST")
+               actions=f"http, Resume, {base}/api/resume, method=POST; http, Cancel, {base}/api/cancel, method=POST", urgent=True)
         c.resume.unlink(missing_ok=True)
         waited = 0
         while not c.resume.exists():
@@ -354,7 +354,7 @@ def main(path):
 
     write(i=0, force=True)
     link.on_temp = lambda: write(i=cur.get("i", 0))  # write() rate-limits itself to every 5 s
-    notify("Print started", name, "printer")
+    notify("Print started", name, "printer", quip_event="print_start")
 
     def final(status, **kw):
         link.on_temp = None  # temp replies during cooldown must not overwrite the final state with "printing"
@@ -368,7 +368,7 @@ def main(path):
         link.run(lines, check_stop=True, on_progress=progress, before=hold)
         mins = round((time.time() - t0) / 60)
         final("done", progress=100)
-        notify("Print done", f"{name}: {mins} min. Rate it: p3d rate 1-5", "white_check_mark")
+        notify("Print done", f"{name}: {mins} min. Rate it: p3d rate 1-5", "white_check_mark", urgent=True, quip_event="print_done")
         finish("done", mins)
         try:
             cooldown(link)
@@ -377,7 +377,7 @@ def main(path):
     except KeyboardInterrupt as stop:
         link.run(safe_stop())
         final("cancelled", at_line=stop.args[0] if stop.args else None, of=total, progress=metrics(cur.get("i", 0))[1])
-        notify("Print cancelled", name, "stop_sign")
+        notify("Print cancelled", name, "stop_sign", urgent=True, quip_event="print_failed")
         finish("cancelled", round((time.time() - t0) / 60))
     except Exception as e:
         try:
@@ -385,7 +385,7 @@ def main(path):
         except Exception:
             pass
         final("failed", error=str(e), progress=metrics(cur.get("i", 0))[1])
-        notify("Print FAILED", f"{name}: {e}", "warning")
+        notify("Print FAILED", f"{name}: {e}", "warning", urgent=True, quip_event="print_failed")
         finish("failed", round((time.time() - t0) / 60))
         raise
     finally:

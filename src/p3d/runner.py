@@ -143,12 +143,12 @@ def queue_next(force=False, notify=False):
             raise Refuse(f"{head['name']}: G-code is gone, remove it: p3d queue remove 1")
         msg = start(head["gcode"], force=force, stop_cooldown=True)
         q_save(q[1:])
-        config.notify("Queued print started", f"{head['name']} (bed assumed clear)", "printer")
+        config.notify("Queued print started", f"{head['name']} (bed assumed clear)", "printer", quip_event="print_start")
         if notify:
             config.desktop_notify("3D printer", f"Started {head['name']} (bed assumed clear)")
         return msg
     except Refuse as e:
-        config.notify("Print NOT started", str(e), "warning")
+        config.notify("Print NOT started", str(e), "warning", urgent=True)
         if notify:
             config.desktop_notify("3D printer: not started", str(e))
         raise

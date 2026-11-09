@@ -123,7 +123,7 @@ def on_job_end(name, grams, status, progress, job=""):
         return used, None
     save(d)
     if r[1]:
-        config.notify("Spool low", f"{name}: {r[0]:.0f} g left", "warning")
+        config.notify("Spool low", f"{name}: {r[0]:.0f} g left", "warning", urgent=True)
     return used, r[0]
 
 

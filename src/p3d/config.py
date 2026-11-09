@@ -33,6 +33,9 @@ DEFAULTS = {
     "models_dir": "",        # your .scad parts (default: ./models if it exists, else <data_dir>/models)
     "ntfy_url": "",          # e.g. https://ntfy.sh/my-printer-topic (empty = no phone alerts)
     "ntfy_token": "",
+    "urgent_ntfy_url": "",   # 2nd topic for loud alerts (done/cool/failed/needs you), sent with Priority 5; empty = off
+    "urgent_hours": [7, 22], # local hours [from, to) when urgent alerts may ring (quiet at night)
+    "quips_file": "",        # funny lines for alerts: "[print_start]" / "[print_done]" / "[print_failed]" headers, one line each
     "web_port": 8765,
     "web_host": "0.0.0.0",
     "cancel_from": [],       # extra IPs allowed to POST /api/cancel (localhost always is), e.g. a home server
@@ -189,22 +192,71 @@ def reset():
 
 # ---------- notifications ----------
 
-def notify(title, msg, tags="printer", actions=None):
-    """ntfy push if ntfy_url is set. Never raises. actions: ntfy action-button string, e.g. 'http, Resume, URL, method=POST'."""
+def urgent_allowed(now=None):
+    """True inside urgent_hours (local time, [from, to))."""
+    import datetime
+    lo, hi = get().urgent_hours
+    h = (now or datetime.datetime.now()).hour
+    return lo <= h < hi
+
+
+def quip(event, pick=None):
+    """A random line under [event] in quips_file, or '' (no file / no such event). Never raises."""
+    import random
+    path = get().quips_file
+    if not path:
+        return ""
+    lines, cur = {}, None
+    try:
+        for raw in pathlib.Path(path).expanduser().read_text().splitlines():
+            t = raw.strip()
+            if not t or t.startswith("#"):
+                continue
+            if t.startswith("[") and t.endswith("]"):
+                cur = lines.setdefault(t[1:-1], [])
+            elif cur is not None:
+                cur.append(t)
+    except OSError:
+        return ""
+    got = lines.get(event) or []
+    return (pick or random.choice)(got) if got else ""
+
+
+def _post(url, title, msg, tags, actions=None, priority=None):
     c = get()
-    if os.environ.get("P3D_NO_NOTIFY") or not c.ntfy_url:
-        return False
-    req = urllib.request.Request(c.ntfy_url, data=msg.encode(), method="POST",
+    req = urllib.request.Request(url, data=msg.encode(), method="POST",
                                  headers={"Title": title, "Tags": tags})
     if actions:
         req.add_header("Actions", actions)
+    if priority:
+        req.add_header("Priority", str(priority))
     if c.ntfy_token:
         req.add_header("Authorization", f"Bearer {c.ntfy_token}")
+    if os.environ.get("P3D_NOTIFY_DRYRUN"):
+        print(f"[dry-run ntfy] {url} P{priority or 3} {title}: {msg}", file=sys.stderr)
+        return True
     try:
         urllib.request.urlopen(req, timeout=10).close()
         return True
     except Exception:
         return False
+
+
+def notify(title, msg, tags="printer", actions=None, urgent=False, now=None, quip_event=None):
+    """ntfy push if ntfy_url is set. Never raises. actions: ntfy action-button string, e.g. 'http, Resume, URL, method=POST'.
+    urgent=True (done, cool, failed, needs attention) also posts to urgent_ntfy_url with Priority 5, only inside urgent_hours.
+    quip_event: put a funny line from quips_file above the facts (same line on both topics).
+    P3D_NOTIFY_DRYRUN=1 prints instead of sending."""
+    c = get()
+    if os.environ.get("P3D_NO_NOTIFY"):
+        return False
+    q = quip(quip_event) if quip_event else ""
+    if q:
+        msg = f"{q}\n\n{msg}"
+    ok = _post(c.ntfy_url, title, msg, tags, actions) if c.ntfy_url else False
+    if urgent and c.urgent_ntfy_url and urgent_allowed(now):
+        ok = _post(c.urgent_ntfy_url, title, msg, tags, actions, priority=5) or ok
+    return ok
 
 
 def desktop_notify(title, msg):

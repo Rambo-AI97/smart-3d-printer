@@ -1,6 +1,7 @@
 """p3d: slice, print and track a Marlin 3D printer from the command line."""
 import argparse
 import json
+import os
 import pathlib
 import re
 import shutil
@@ -494,6 +495,25 @@ def cmd_doctor(a):
     sys.exit(doctor.run(quiet=a.quiet))
 
 
+def cmd_notify_test(a):
+    """Send one test alert through the same helper a real 'Print done' uses. No printer involved."""
+    import datetime
+    if a.dry_run:
+        os.environ["P3D_NOTIFY_DRYRUN"] = "1"
+    c = config.get()
+    day = config.urgent_allowed()
+    print(f"normal topic: {'set' if c.ntfy_url else 'NOT set'}; loud topic: {'set' if c.urgent_ntfy_url else 'NOT set'}; "
+          f"loud hours {c.urgent_hours[0]:02d}-{c.urgent_hours[1]:02d}, now {'loud' if day else 'quiet'}")
+    now = datetime.datetime.now().replace(hour=c.urgent_hours[0]) if a.urgent else None
+    if a.only_urgent:
+        if not c.urgent_ntfy_url or not (day or a.urgent):
+            sys.exit("nothing sent: no loud topic, or quiet hours (add --urgent to override)")
+        sent = config._post(c.urgent_ntfy_url, "Printer test (loud)", a.message, "printer", priority=5)
+    else:
+        sent = config.notify("Printer test", a.message, "printer", urgent=True, now=now)
+    print("sent" if sent else "nothing sent (check ntfy_url / urgent_ntfy_url)")
+
+
 def cmd_install_service(a):
     from . import service
     service.install(start=not a.no_start)
@@ -597,6 +617,11 @@ COMMANDS = {
          [A("-y", "--yes", action="store_true", help="accept detected defaults, no questions")]),
         ("doctor", cmd_doctor, "check port, permissions, slicer, profiles, services; says how to fix",
          [A("-q", "--quiet", action="store_true", help="only problems")]),
+        ("notify-test", cmd_notify_test, "send one test phone alert (normal + loud topic if daytime); no printer",
+         [A("--dry-run", action="store_true", help="print what would be sent, send nothing"),
+          A("--urgent", action="store_true", help="ring the loud topic even in quiet hours"),
+          A("--only-urgent", action="store_true", help="send to the loud topic only, not the normal one"),
+          A("-m", "--message", default="Test alert from p3d. If your phone rang through silent, loud alerts work.")]),
         ("install-service", cmd_install_service, "write the systemd user units (web, print, cooldown)",
          [A("--no-start", action="store_true", help="write the units but don't start the dashboard")]),
     ],

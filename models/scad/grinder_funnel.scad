@@ -3,7 +3,7 @@
 // the grounds run out of the point into the French press.
 // Flair: shield band on the sleeve, a keel ridge running up into the pour point (longship bow),
 // "KAFFI" runes on the back, flared rim. Printed upright on the sleeve flange, no supports.
-bowl_d = 79;      // grinder bowl outside diameter (measured 77, fit ring was 2 mm too tight)
+bowl_d = 82;      // grinder bowl outside diameter (measured 77; 77 ring 2 mm tight, 79 collar still too small -> +3, 2026-11-09)
 grip_h = 25;      // sleeve depth (straight wall is 35)
 part = "collar";  // "collar" | "fit" (8 mm test ring)
 
