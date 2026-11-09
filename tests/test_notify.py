@@ -95,3 +95,12 @@ def test_quip_goes_above_facts(posts, tmp_path):
 def test_quip_missing_file_is_silent():
     config._cfg = config.Config({"quips_file": "/nonexistent/q.txt"})
     assert config.quip("print_done") == ""
+
+
+def test_spoken_line_short_and_readable():
+    from p3d import config
+    q = "Not bad for a machine that melts plastic."
+    s = config.spoken("Print done", f"{q}\n\nphone_dock_v2: 112 min. Rate it: p3d rate 1-5", q)
+    assert s == "Print done. phone dock v2: 112 min. " + q
+    assert config.spoken("Printer cool", "nozzle 42 C, bed 40 C, motors off. Safe to remove.") == "Printer cool. nozzle 42 C, bed 40 C, motors off."
+    assert len(config.spoken("x", "y" * 500)) <= 240

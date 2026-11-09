@@ -6,6 +6,7 @@ Written by `p3d setup`; see config.example.toml.
 import glob
 import json
 import os
+import re
 import pathlib
 import shutil
 import subprocess
@@ -35,6 +36,7 @@ DEFAULTS = {
     "ntfy_token": "",
     "urgent_ntfy_url": "",   # 2nd topic for loud alerts (done/cool/failed/needs you), sent with Priority 5; empty = off
     "urgent_hours": [7, 22], # local hours [from, to) when urgent alerts may ring (quiet at night)
+    "voice_url": "",         # webhook that speaks loud alerts on the phone (e.g. Home Assistant app TTS); POST {"text"}; empty = off
     "quips_file": "",        # funny lines for alerts: "[print_start]" / "[print_done]" / "[print_failed]" headers, one line each
     "web_port": 8765,
     "web_host": "0.0.0.0",
@@ -254,9 +256,39 @@ def notify(title, msg, tags="printer", actions=None, urgent=False, now=None, qui
     if q:
         msg = f"{q}\n\n{msg}"
     ok = _post(c.ntfy_url, title, msg, tags, actions) if c.ntfy_url else False
-    if urgent and c.urgent_ntfy_url and urgent_allowed(now):
-        ok = _post(c.urgent_ntfy_url, title, msg, tags, actions, priority=5) or ok
+    if urgent and urgent_allowed(now):
+        if c.urgent_ntfy_url:
+            ok = _post(c.urgent_ntfy_url, title, msg, tags, actions, priority=5) or ok
+        if c.voice_url:
+            ok = speak(spoken(title, msg, q)) or ok
     return ok
+
+
+def spoken(title, msg, q=""):
+    """Short line for text-to-speech: title, first fact sentence (job names readable), then the quip."""
+    fact = msg[len(q):].strip() if q and msg.startswith(q) else msg
+    fact = re.split(r"(?<=[.!?])\s|\n", fact.replace("_", " "))[0].strip()
+    fact = re.sub(r"\s*Rate it:.*$", "", fact)
+    parts = [title.rstrip(".") + "."] + ([fact] if fact else []) + ([q] if q else [])
+    return " ".join(parts)[:240]
+
+
+def speak(text):
+    """POST {"text": ...} to voice_url (phone TTS). Never raises. P3D_NOTIFY_DRYRUN=1 prints instead."""
+    url = get().voice_url
+    if not url:
+        return False
+    if os.environ.get("P3D_NOTIFY_DRYRUN"):
+        print(f"[dry-run voice] {text}", file=sys.stderr)
+        return True
+    import json
+    req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), method="POST",
+                                 headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=10).close()
+        return True
+    except Exception:
+        return False
 
 
 def desktop_notify(title, msg):
