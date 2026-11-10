@@ -1,6 +1,6 @@
 """Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except the POST endpoints
-(cancel, pause, resume, queue/next|move|remove, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
-import csv, json, pathlib, sys, time
+(cancel, pause, resume, queue/next|move|remove|add, models/slice, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
+import csv, json, os, pathlib, re, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .. import config, ideas, insights, pause, printlog, runner, spools
@@ -54,8 +54,19 @@ def history_cards(limit=50):
     for r in rows[::-1][:limit]:
         c = {k: r.get(k) or "" for k in ("date", "name", "status", "actual_min", "est_min", "grams", "grams_used", "filament", "rating")}
         c["job"] = job_id_of(r.get("file") or "")
+        c["jid"], c["sliced"] = "", ""
+        try:  # job folder + gcode still on disk -> "Add to queue" possible
+            gp = pathlib.Path(r.get("file") or "").resolve()
+            if gp.is_file() and gp.parent.parent == config.get().jobs.resolve() and not job_meta_manual(gp):
+                c["jid"], c["sliced"] = gp.parent.name, gcode_filament(gp)
+        except Exception:
+            pass
         out.append(c)
     return out
+
+
+def job_meta_manual(g):
+    return bool(runner.job_meta(g).get("manual_z"))
 
 
 def num(v):
@@ -141,13 +152,129 @@ def gcode_facts(path):
     return _INFO[key]
 
 
+def loaded_filament():
+    """Material in the printer: active spool's, else config `filament`. Empty material = unknown (never guess)."""
+    try:
+        s = spools.active(spools.load())
+        if s and s.get("material"):
+            return {"material": str(s["material"]).upper(), "source": "spool " + str(s.get("name", ""))}
+    except Exception:
+        pass
+    f = str(config.Config().raw.get("filament") or "").strip()
+    return {"material": f.upper(), "source": "config" if f else ""}
+
+
+_FIL = {}
+
+
+def gcode_filament(path):
+    """`; filament_type = X` of a gcode, read from the tail (Orca writes its settings last), else the head. Cached by mtime."""
+    try:
+        st = pathlib.Path(path).stat()
+    except OSError:
+        return ""
+    key = (path, st.st_mtime)
+    if key not in _FIL:
+        v = ""
+        try:
+            with open(path, "rb") as f:
+                for pos in (max(0, st.st_size - 262144), 0):
+                    f.seek(pos)
+                    m = None
+                    for m in re.finditer(rb"^; filament_type = ([^;\r\n]+)", f.read(262144), re.M):
+                        pass
+                    if m:
+                        v = m.group(1).decode().strip().upper()
+                        break
+        except Exception:
+            pass
+        _FIL[key] = v
+    return _FIL[key]
+
+
+def job_gcode(jid):
+    """Gcode of a job folder under the jobs dir. `jid` must be a plain basename of an existing folder; else None."""
+    if not jid or jid != pathlib.Path(jid).name or jid in (".", ".."):
+        return None
+    d = config.get().jobs / jid
+    try:
+        return runner.resolve_gcode(d) if d.is_dir() else None
+    except runner.Refuse:
+        return None
+
+
+def queue_add(b):
+    g = job_gcode(str(b.get("job") or ""))
+    if not g:
+        raise runner.Refuse("no such job folder")
+    q = runner.q_add(runner.q_load(), g)
+    runner.q_save(q)
+    return f"queued #{len(q)}: {q[-1]['name']}"
+
+
+def models_dir():
+    return pathlib.Path(os.environ.get("P3D_MODELS_LIB") or pathlib.Path(__file__).resolve().parents[3] / "models")
+
+
+def model_list():
+    """Printable library: every *.stl under models/ (id = path relative to it), with the sibling .png if present."""
+    root, out = models_dir(), []
+    for p in sorted(root.rglob("*.stl")) if root.is_dir() else []:
+        rel = p.relative_to(root)
+        out.append({"id": rel.as_posix(), "name": p.stem, "folder": rel.parent.as_posix() if rel.parent.as_posix() != "." else "",
+                    "picture": p.with_suffix(".png").is_file()})
+    return out
+
+
+_TASKS, _TLOCK = {}, threading.Lock()
+
+
+def slice_start(b, run=None):
+    """Start `p3d slice MODEL -f <loaded>` + queue add in a background thread (one at a time). Returns the task id.
+    Raises runner.Refuse. Never prints. `run` is for tests."""
+    known = {m["id"] for m in model_list()}
+    mid = str(b.get("model") or "")
+    if mid not in known:
+        raise runner.Refuse("unknown model")
+    fil = loaded_filament()["material"].lower()
+    if fil not in ("pla", "petg"):
+        raise runner.Refuse("loaded filament unknown (or not PLA/PETG): run p3d spool use")
+    with _TLOCK:
+        if any(t["state"] == "running" for t in _TASKS.values()):
+            raise runner.Refuse("another slice is running, wait for it")
+        tid = str(int(time.time() * 1000))
+        _TASKS[tid] = {"id": tid, "state": "running", "model": mid, "msg": "slicing..."}
+        for old in sorted(_TASKS)[:-20]:
+            _TASKS.pop(old, None)
+    path = models_dir() / mid
+
+    def work():
+        try:
+            if run:
+                job_dir_, final = run(path, fil)
+            else:
+                from .. import cli
+                job_dir_, final, _ = cli.slice_model(path, filament=fil)
+            with _TLOCK:
+                q = runner.q_add(runner.q_load(), final)
+                runner.q_save(q)
+                _TASKS[tid].update(state="done", msg=f"queued #{len(q)}: {q[-1]['name']}", n=len(q), job=job_dir_.name)
+        except SystemExit as e:
+            _TASKS[tid].update(state="error", msg=str(e.code))
+        except Exception as e:
+            _TASKS[tid].update(state="error", msg=str(e))
+
+    threading.Thread(target=work, daemon=True).start()
+    return tid
+
+
 def queue_view():
     out = []
     for n, e in enumerate(runner.q_load(), 1):
         g = e.get("gcode") or ""
         f = gcode_facts(g)
         out.append({"n": n, "name": e.get("name"), "note": e.get("note", ""), "added": e.get("added", ""),
-                    "missing": f is None, "job": job_id_of(g), **(f or {"est_min": "", "grams": "", "filament": ""})})
+                    "missing": f is None, "job": job_id_of(g), "sliced": gcode_filament(g), **(f or {"est_min": "", "grams": "", "filament": ""})})
     return out
 
 
@@ -189,6 +316,7 @@ class H(BaseHTTPRequestHandler):
                     pass
             s["server_time"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             s["server_ts"] = time.time()
+            s["loaded_filament"] = loaded_filament()
             self.send(json.dumps(s).encode(), "application/json")
         elif path == "/api/preview.png":
             d = job_dir(read_state())
@@ -197,6 +325,22 @@ class H(BaseHTTPRequestHandler):
                 self.send(p.read_bytes(), "image/png")
             else:
                 self.send(b"", "text/plain", 404)
+        elif path == "/api/filament":
+            self.send(json.dumps(loaded_filament()).encode(), "application/json")
+        elif path == "/api/models":
+            self.send(json.dumps(model_list()).encode(), "application/json")
+        elif path == "/api/model.png":
+            mid = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id", [""])[0]
+            p = (models_dir() / mid).with_suffix(".png") if mid in {m["id"] for m in model_list()} else None
+            if p and p.is_file():
+                self.send(p.read_bytes(), "image/png")
+            else:
+                self.send(b"", "text/plain", 404)
+        elif path == "/api/tasks":
+            self.send(json.dumps(list(_TASKS.values())).encode(), "application/json")
+        elif path.startswith("/api/tasks/"):
+            t = _TASKS.get(pathlib.Path(path).name)
+            self.send(json.dumps(t).encode() if t else b"not found", "application/json" if t else "text/plain", 200 if t else 404)
         elif path == "/api/history":
             self.send(json.dumps(history()).encode(), "application/json")
         elif path == "/api/history/cards":
@@ -239,7 +383,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move", "/api/queue/remove", "/api/ideas"):
+        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move", "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/ideas"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -262,6 +406,16 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/queue/next":
                 try:
                     return self.reply({"ok": runner.queue_next(notify=True)})
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            if path == "/api/queue/add":
+                try:
+                    return self.reply({"ok": queue_add(self.body())})
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            if path == "/api/models/slice":
+                try:
+                    return self.reply({"ok": "slicing", "task": slice_start(self.body())}, 202)
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
             if path in ("/api/queue/move", "/api/queue/remove"):
