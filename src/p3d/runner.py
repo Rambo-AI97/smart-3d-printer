@@ -1,5 +1,6 @@
 """Start a print job (shared by `p3d print`, `p3d queue next` and the dashboard) and the print queue."""
 import json
+import os
 import pathlib
 import subprocess
 import time
@@ -105,7 +106,9 @@ def q_load():
 def q_save(q):
     f = config.get().queue_file
     f.parent.mkdir(parents=True, exist_ok=True)
-    f.write_text(json.dumps(q, indent=1))
+    tmp = f.with_name(f.name + ".tmp")  # atomic: the runner never sees a half-written queue
+    tmp.write_text(json.dumps(q, indent=1))
+    os.replace(tmp, f)
 
 
 def q_add(q, gcode, note=""):
@@ -120,6 +123,14 @@ def q_remove(q, n):
     if not 1 <= n <= len(q):
         raise Refuse(f"no queue entry {n} (p3d queue list)")
     return q.pop(n - 1)
+
+
+def q_move(q, n, m):
+    """Move entry n to position m (1-based), in place. Entries keep every field."""
+    if not (1 <= n <= len(q) and 1 <= m <= len(q)):
+        raise Refuse(f"queue positions are 1..{len(q)}")
+    q.insert(m - 1, q.pop(n - 1))
+    return q
 
 
 def next_refusal(q):
@@ -166,6 +177,9 @@ def cmd_queue(a):
             r = q_remove(q, int(a.arg or 0))
             q_save(q)
             print("removed", r["name"])
+        elif a.action == "move":
+            q_save(q_move(q, int(a.arg or 0), int(getattr(a, "arg2", None) or 0)))
+            print("moved; queue order saved")
         elif a.action == "next":
             print(queue_next(a.force, a.notify))
         else:

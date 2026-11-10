@@ -354,7 +354,7 @@ def main(path):
 
     write(i=0, force=True)
     link.on_temp = lambda: write(i=cur.get("i", 0))  # write() rate-limits itself to every 5 s
-    notify("Print started", name, "printer", quip_event="print_start")
+    notify("Print started", name, "printer", urgent=True, quip_event="print_start")
 
     def final(status, **kw):
         link.on_temp = None  # temp replies during cooldown must not overwrite the final state with "printing"

@@ -1,5 +1,5 @@
 """Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except the POST endpoints
-(cancel, pause, resume, queue/next, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
+(cancel, pause, resume, queue/next|move|remove, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
 import csv, json, pathlib, sys, time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -34,6 +34,28 @@ def log_rows():
     except Exception:
         return []
     return [r for r in rows if r.get("status") in ("done", "cancelled", "failed")][-20:][::-1]
+
+
+def job_id_of(gcode):
+    """Job folder name for a gcode path, only if that folder (under the jobs dir) still has a preview picture."""
+    try:
+        p = pathlib.Path(gcode).resolve()
+        if p.parent.parent == config.get().jobs.resolve() and (p.parent / "preview.png").is_file():
+            return p.parent.name
+    except Exception:
+        pass
+    return ""
+
+
+def history_cards(limit=50):
+    """Newest-first past prints with picture ids, for the History page."""
+    rows = [r for r in read_csv("print_log.csv") if r.get("status") in ("done", "cancelled", "failed")]
+    out = []
+    for r in rows[::-1][:limit]:
+        c = {k: r.get(k) or "" for k in ("date", "name", "status", "actual_min", "est_min", "grams", "grams_used", "filament", "rating")}
+        c["job"] = job_id_of(r.get("file") or "")
+        out.append(c)
+    return out
 
 
 def num(v):
@@ -101,8 +123,47 @@ def stats():
                      for r in insights.printed(rows)]}
 
 
+_INFO = {}
+
+
+def gcode_facts(path):
+    """est_min / grams / filament from the gcode header, cached by (path, mtime)."""
+    try:
+        key = (path, pathlib.Path(path).stat().st_mtime)
+    except OSError:
+        return None
+    if key not in _INFO:
+        try:
+            i = printlog.gcode_info(path)
+            _INFO[key] = {"est_min": i.get("est_min") or "", "grams": i.get("grams") or "", "filament": i.get("filament") or ""}
+        except Exception:
+            _INFO[key] = {"est_min": "", "grams": "", "filament": ""}
+    return _INFO[key]
+
+
 def queue_view():
-    return [{"n": n, "name": e.get("name"), "note": e.get("note", "")} for n, e in enumerate(runner.q_load(), 1)]
+    out = []
+    for n, e in enumerate(runner.q_load(), 1):
+        g = e.get("gcode") or ""
+        f = gcode_facts(g)
+        out.append({"n": n, "name": e.get("name"), "note": e.get("note", ""), "added": e.get("added", ""),
+                    "missing": f is None, "job": job_id_of(g), **(f or {"est_min": "", "grams": "", "filament": ""})})
+    return out
+
+
+def queue_edit(b, remove=False):
+    """Reorder/remove by 1-based index into the real queue. `name` guards against a stale view."""
+    q = runner.q_load()
+    n = int(b.get("n", 0))
+    if b.get("name") is not None and 1 <= n <= len(q) and q[n - 1].get("name") != b["name"]:
+        raise runner.Refuse("the queue changed, refreshed")
+    if remove:
+        r = runner.q_remove(q, n)
+        runner.q_save(q)
+        return "removed " + str(r.get("name"))
+    runner.q_move(q, n, int(b.get("to", 0)))
+    runner.q_save(q)
+    return "moved"
 
 
 class H(BaseHTTPRequestHandler):
@@ -138,6 +199,15 @@ class H(BaseHTTPRequestHandler):
                 self.send(b"", "text/plain", 404)
         elif path == "/api/history":
             self.send(json.dumps(history()).encode(), "application/json")
+        elif path == "/api/history/cards":
+            self.send(json.dumps(history_cards()).encode(), "application/json")
+        elif path.startswith("/api/job/") and path.endswith("/preview.png"):
+            jid = pathlib.Path(path[len("/api/job/"):-len("/preview.png")]).name  # basename only
+            p = config.get().jobs / jid / "preview.png"
+            if jid and p.is_file():
+                self.send(p.read_bytes(), "image/png")
+            else:
+                self.send(b"", "text/plain", 404)
         elif path.startswith("/api/print/"):
             f = pathlib.Path(path[len("/api/print/"):]).name  # basename only: no path tricks
             rows = []
@@ -169,7 +239,7 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/ideas"):
+        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move", "/api/queue/remove", "/api/ideas"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -194,6 +264,14 @@ class H(BaseHTTPRequestHandler):
                     return self.reply({"ok": runner.queue_next(notify=True)})
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
+            if path in ("/api/queue/move", "/api/queue/remove"):
+                try:
+                    msg = queue_edit(self.body(), remove=path.endswith("remove"))
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+                except (TypeError, ValueError):
+                    return self.reply({"error": "n and to must be numbers"}, 400)
+                return self.reply({"ok": msg})
             b = self.body()  # /api/ideas
             items = ideas.load()
             try:

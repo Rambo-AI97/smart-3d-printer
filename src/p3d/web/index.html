@@ -26,9 +26,9 @@ h1{font-size:20px;margin:0;font-weight:600;display:flex;justify-content:space-be
 canvas{width:100%;height:150px;display:block;margin-top:8px}
 table{width:100%;border-collapse:collapse;font-size:14px}td,th{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left}
 th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td.s-failed{color:var(--bad)}td.s-cancelled{color:var(--warn)}
-.tabs{display:flex;gap:8px}.tabs button{background:var(--card);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:6px 16px;font:inherit;font-size:14px;cursor:pointer}
+.tabs{display:flex;gap:8px;flex-wrap:wrap}.tabs button{background:var(--card);color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:6px 16px;font:inherit;font-size:14px;cursor:pointer}
 .tabs button.on{background:var(--accbg);color:var(--acc);border-color:var(--acc)}
-.hide{display:none!important}#live,#hist,#stats,#ideas{display:grid;gap:14px}
+.hide{display:none!important}#live,#hist,#stats,#ideas,#pq,#ph{display:grid;gap:14px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.grid2{grid-template-columns:1fr}}
 .cv{height:190px}.leg{font-size:12px;color:var(--mute);margin-top:4px}.leg i{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:-1px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.chips button{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:4px 9px;font:inherit;font-size:12px;cursor:pointer}
@@ -39,10 +39,18 @@ button.act:disabled{opacity:.4;cursor:default}.msg{font-size:13px;color:var(--mu
 .idea{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.idea span{flex:1;word-break:break-word}
 select,input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px}
 input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl{font-size:13px;margin-top:6px;color:var(--mute)}.tl b{color:var(--fg)}
+.pcards{display:grid;gap:10px;margin-top:10px}
+.pc{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:center;border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg)}
+.pc.head{border-color:var(--acc)}.pc img,.pc .ph{width:96px;height:96px;border-radius:8px;background:var(--pvbg);object-fit:contain}
+.pc .ph{display:grid;place-items:center;color:var(--mute);font-size:12px}
+.pc .t{font-weight:600;word-break:break-word}.pc .m{color:var(--mute);font-size:13px;margin-top:2px}
+.pc .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.pc .btns button.act{margin:0;padding:6px 12px}
+.pc.miss{opacity:.7}.stars{color:var(--warn);letter-spacing:2px}
+@media(max-width:420px){.pc{grid-template-columns:72px 1fr}.pc img,.pc .ph{width:72px;height:72px}}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
 </style></head><body><main>
 <h1>Printer <span id="upd">connecting...</span></h1>
-<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button></div>
+<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-pq" onclick="tab('pq')">Queue</button><button id="tb-ph" onclick="tab('ph')">Past prints</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button></div>
 <div id="live">
 <section class="card hero">
   <img id="pv" alt="model preview" style="visibility:hidden">
@@ -96,6 +104,12 @@ input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl
 <section class="card"><div class="lab">Print hours per week</div><canvas class="cv" id="s-hours"></canvas></section>
 </div>
 <section class="card"><div class="lab">Settings changes (dashed line = settings changed before that job)</div><canvas class="cv" id="s-tl" style="height:150px"></canvas><div class="leg"><i style="background:var(--ok)"></i>done<i style="background:var(--warn)"></i>cancelled<i style="background:var(--bad)"></i>failed</div><div id="s-chg" class="tl"></div><div id="s-rec" class="tl"></div></section>
+</div>
+<div id="pq" class="hide">
+<section class="card"><div class="lab">Print queue: runs top to bottom</div><div class="msg" id="m-pq"></div><div id="pq-list" class="pcards">–</div></section>
+</div>
+<div id="ph" class="hide">
+<section class="card"><div class="lab">Past prints (newest 50)</div><div id="ph-list" class="pcards">–</div></section>
 </div>
 <div id="ideas" class="hide">
 <section class="card"><div class="lab">Add an idea</div><div class="row" style="margin-top:8px"><input type="text" id="i-text" placeholder="print idea, #tags allowed"><select id="i-status"></select><button class="act" style="margin:0" onclick="addIdea()">Add</button></div><div class="msg" id="m-i"></div></section>
@@ -157,8 +171,8 @@ async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-st
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
 
 let curTab='live',histLoaded=0,H=null;
-function tab(t){curTab=t;for(const k of['live','hist','stats','ideas']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
-  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else chart()}
+function tab(t){curTab=t;for(const k of['live','hist','stats','ideas','pq','ph']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
+  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else chart()}
 const COL={};let T={};
 function theme(){const cs=getComputedStyle(document.documentElement),g=k=>cs.getPropertyValue('--'+k).trim();
   Object.assign(T,{line:g('line'),mute:g('mute'),fg:g('fg')});Object.assign(COL,{done:g('ok'),cancelled:g('warn'),failed:g('bad'),acc:g('acc'),noz:g('noz')})}theme();
@@ -223,6 +237,22 @@ async function post(url,msgId,body){const m=$(msgId);m.textContent='...';
     tick();queueLoad();return j}catch(e){m.textContent='failed: '+e;return{}}}
 async function queueLoad(){try{const q=await (await fetch('/api/queue',{cache:'no-store'})).json();
   $('queue').innerHTML=q.map(e=>`<div class="idea"><span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
+// ---- queue page, past prints page ----
+const pic=j=>j?`<img loading="lazy" src="/api/job/${encodeURIComponent(j)}/preview.png" alt="">`:'<div class="ph">no picture</div>';
+const mins=m=>{m=Math.round(+m);return m>=60?Math.floor(m/60)+' h '+(m%60)+' min':m+' min'};
+async function pqLoad(){let q;try{q=await (await fetch('/api/queue',{cache:'no-store'})).json()}catch(e){return}
+  $('pq-list').innerHTML=q.map((e,i)=>`<div class="pc${i?'':' head'}${e.missing?' miss':''}">${pic(e.job)}<div>
+    <div class="t">${e.n}. ${esc(e.name)}</div>
+    <div class="m">${[+e.est_min>0&&mins(e.est_min),+e.grams>0&&(+e.grams).toFixed(1)+' g',e.filament,e.missing&&'G-code is gone: remove it',esc(e.note)].filter(Boolean).join(' · ')}</div>
+    <div class="btns"><button class="act" ${i?'':'disabled'} onclick="qMove(${e.n},${e.n-1},'${encodeURIComponent(e.name)}')">&uarr;</button><button class="act" ${i<q.length-1?'':'disabled'} onclick="qMove(${e.n},${e.n+1},'${encodeURIComponent(e.name)}')">&darr;</button>
+    <button class="act" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="qRemove(${e.n},'${encodeURIComponent(e.name)}')">Remove</button>
+    ${i?'':'<button class="act" onclick="if(confirm(\'Start this print now? The bed must be clear.\'))post(\'/api/queue/next\',\'m-pq\').then(pqLoad)">Print next now</button>'}</div></div></div>`).join('')||'The queue is empty.'}
+async function qMove(n,to,name){await post('/api/queue/move','m-pq',{n:n,to:to,name:decodeURIComponent(name)});pqLoad()}
+async function qRemove(n,name){if(!confirm('Remove #'+n+' from the queue?'))return;await post('/api/queue/remove','m-pq',{n:n,name:decodeURIComponent(name)});pqLoad()}
+async function phLoad(){let h;try{h=await (await fetch('/api/history/cards',{cache:'no-store'})).json()}catch(e){return}
+  $('ph-list').innerHTML=h.map(r=>`<div class="pc">${pic(r.job)}<div><div class="t">${esc(r.name)}</div>
+    <div style="margin-top:4px"><span class="badge ${esc(r.status)}" style="margin:0">${esc(r.status)}</span> <span class="stars">${'&#9733;'.repeat(+r.rating||0)}</span></div>
+    <div class="m">${[esc(r.date).slice(0,16),+r.actual_min>0&&mins(r.actual_min),(+r.grams_used||+r.grams)>0&&(+r.grams_used||+r.grams).toFixed(1)+' g',esc(r.filament)].filter(Boolean).join(' · ')}</div></div></div>`).join('')||'No prints yet.'}
 // ---- stats ----
 let ST=null;
 function lines(id,labels,series){const g=cv(id);if(!labels.length)return empty(g,'no printed jobs yet');
@@ -259,5 +289,5 @@ async function loadIdeas(){let j;try{j=await (await fetch('/api/ideas',{cache:'n
     `<div class="idea"><span>#${i.id} ${esc(i.text)}${i.job?' <small>['+esc(i.job)+']</small>':''}</span><select onchange="moveIdea(${i.id},this.value)">${j.statuses.map(s=>`<option${s===i.status?' selected':''}>${s}</option>`).join('')}</select></div>`).join(''):''}).join('')||'no ideas yet'}
 async function addIdea(){const t=$('i-text').value.trim();if(!t)return;const j=await post('/api/ideas','m-i',{action:'add',text:t,status:$('i-status').value});if(j.ok){$('i-text').value='';loadIdeas()}}
 async function moveIdea(id,st){await post('/api/ideas','m-i',{action:'move',id:id,status:st});loadIdeas()}
-tick();logs();queueLoad();setInterval(queueLoad,10000);setInterval(tick,3000);if(['hist','stats','ideas'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
+tick();logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);if(['hist','stats','ideas','pq','ph'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

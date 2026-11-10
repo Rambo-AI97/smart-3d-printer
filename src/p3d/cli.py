@@ -526,7 +526,21 @@ def A(*flags, **kw):
 
 
 QUAL = A("-q", "--quality", default="standard", choices=["draft", "standard", "fine"])
-FIL = A("-f", "--filament", default="petg", choices=["pla", "petg"])
+def default_filament():
+    """Active spool's material, else config 'filament', else petg."""
+    try:
+        from . import spools
+        s = spools.active(spools.load())
+        if s and s.get("material") in ("pla", "petg"):
+            return s["material"]
+    except Exception:
+        pass
+    f = str(config.Config().raw.get("filament", "petg")).lower()
+    return f if f in ("pla", "petg") else "petg"
+
+
+FIL = A("-f", "--filament", default=default_filament(), choices=["pla", "petg"],
+        help="default: active spool material, else config 'filament', else petg")
 
 COMMANDS = {
     "Print": [
@@ -541,8 +555,8 @@ COMMANDS = {
          [A("--at-layer", type=int, action="append", metavar="N")]),
         ("resume", cmd_resume, "continue a paused print", []),
         ("cancel", cmd_cancel, "safe stop: heaters off, lift, park", []),
-        ("queue", cmd_queue, "approved jobs: add JOB | list | remove N | next (starts the head; bed must be clear)",
-         [A("action", choices=["add", "list", "remove", "next"], nargs="?", default="list"), A("arg", nargs="?"),
+        ("queue", cmd_queue, "approved jobs: add JOB | list | remove N | move N M | next (starts the head; bed must be clear)",
+         [A("action", choices=["add", "list", "remove", "move", "next"], nargs="?", default="list"), A("arg", nargs="?"), A("arg2", nargs="?"),
           A("--note"), A("--force", action="store_true", help="next: ignore the spool check"),
           A("--notify", action="store_true", help="next: desktop notification with the result")]),
         ("wait", cmd_wait, "block until the current job's first layer or its end (exit 0 = done)",

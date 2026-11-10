@@ -252,6 +252,7 @@ def notify(title, msg, tags="printer", actions=None, urgent=False, now=None, qui
     c = get()
     if os.environ.get("P3D_NO_NOTIFY"):
         return False
+    story(title, msg, tags)
     q = quip(quip_event) if quip_event else ""
     if q:
         msg = f"{q}\n\n{msg}"
@@ -262,6 +263,20 @@ def notify(title, msg, tags="printer", actions=None, urgent=False, now=None, qui
         if c.voice_url:
             ok = speak(spoken(title, msg, q)) or ok
     return ok
+
+
+def story(title, msg, tags="printer"):
+    """One event in the Rambo Logbook (`rambo logs printer`) per notification. Never raises; off in dry-run."""
+    if os.environ.get("P3D_NOTIFY_DRYRUN") or os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    try:
+        sys.path.insert(0, os.path.expanduser("~/logbook"))
+        from rlog import rlog
+    except Exception:
+        return
+    t = title.lower()
+    level = "error" if ("fail" in t or "not started" in t) else "warn" if tags in ("warning", "stop_sign") else "info"
+    rlog("printer", level, f"{title}: {msg}", event=title)
 
 
 def spoken(title, msg, q=""):
@@ -284,11 +299,15 @@ def speak(text):
     import json
     req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), method="POST",
                                  headers={"Content-Type": "application/json"})
-    try:
-        urllib.request.urlopen(req, timeout=10).close()
-        return True
-    except Exception:
-        return False
+    import time
+    for attempt in range(3):  # one missed POST = silent phone (2026-11-09 cancel): retry, and say why in the journal
+        try:
+            urllib.request.urlopen(req, timeout=15).close()
+            return True
+        except Exception as e:
+            print(f"p3d voice: attempt {attempt + 1} failed: {e}", file=sys.stderr)
+            time.sleep(3)
+    return False
 
 
 def desktop_notify(title, msg):

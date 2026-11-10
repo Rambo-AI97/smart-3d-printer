@@ -65,7 +65,7 @@ def test_dry_run_sends_nothing(posts, monkeypatch, capsys):
 
 
 def test_which_alerts_are_loud(monkeypatch):
-    """Done/cool/failed/cancelled/paused/warm/not-started/spool-low are urgent; started/resumed are not."""
+    """Done/cool/failed/cancelled/paused/warm/not-started/spool-low are urgent; resumed/queued-start are not (start is loud since 2026-11-09 spoken alerts)."""
     import inspect
     import re
     from p3d import runner, spools
@@ -73,8 +73,8 @@ def test_which_alerts_are_loud(monkeypatch):
     calls = re.findall(r'notify\(\s*"([^"]+)"(.*?)\)\s*$', src, re.M | re.S)
     loud = {t for t, rest in calls if "urgent=True" in rest}
     assert {"Print done", "Printer cool", "Print FAILED", "Print cancelled", "Print paused",
-            "Printer still warm", "Print NOT started", "Spool low"} <= loud
-    assert not loud & {"Print started", "Print resumed", "Queued print started"}
+            "Printer still warm", "Print NOT started", "Spool low", "Print started"} <= loud
+    assert not loud & {"Print resumed", "Queued print started"}
 
 
 def test_quip_goes_above_facts(posts, tmp_path):
