@@ -144,6 +144,13 @@ def cmd_wait(a):
         time.sleep(a.interval)
 
 
+def cmd_retry(a):
+    try:
+        print(runner.retry_last(a.notify))
+    except runner.Refuse as e:
+        sys.exit(str(e))
+
+
 def cmd_cooldown(_):
     _start_unit("p3d-cooldown", ["--cooldown"])
     print("cooldown watcher started: after the print, heaters off, wait until cool, motors off, ntfy")
@@ -229,7 +236,9 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
             info.setdefault(m.group(1), m.group(2))
         elif line.startswith("M190 S"):
             info.setdefault("bed_temperature", line.split()[1][1:])
-    (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final)}))
+    (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final), "settings": {
+        "quality": quality, "filament": filament, "supports": bool(supports), "brim": bool(brim), "walls": walls,
+        "infill": infill, "keep_orient": bool(keep_orient)}}))
     try:
         from . import preview
         preview.make(model, out / "preview.png")
@@ -558,11 +567,14 @@ COMMANDS = {
         ("queue", cmd_queue, "approved jobs: add JOB | list | remove N | move N M | next (starts the head; bed must be clear)",
          [A("action", choices=["add", "list", "remove", "move", "next"], nargs="?", default="list"), A("arg", nargs="?"), A("arg2", nargs="?"),
           A("--note"), A("--force", action="store_true", help="next: ignore the spool check"),
+          A("--pause-at-layer", type=int, action="append", metavar="N", help="add: pause before layer N when it starts; repeat"),
           A("--notify", action="store_true", help="next: desktop notification with the result")]),
         ("wait", cmd_wait, "block until the current job's first layer or its end (exit 0 = done)",
          [A("until", choices=["layer", "done"]), A("--job", help="job id (default: the current one)"),
           A("--interval", type=float, default=5, help=argparse.SUPPRESS),
           A("--grace", type=float, default=15, help=argparse.SUPPRESS)]),
+        ("retry", cmd_retry, "reprint the newest real job from the print log (bed assumed clear)",
+         [A("--notify", action="store_true", help="desktop notification with the result")]),
         ("cooldown", cmd_cooldown, "after the current print: wait until cool, motors off, ntfy", []),
         ("web", cmd_web, "the live dashboard (prints its URLs, starts the service)",
          [A("--open", action="store_true", help="open in the browser"),

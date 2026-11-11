@@ -49,9 +49,28 @@ input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl
 @media(max-width:420px){.pc{grid-template-columns:72px 1fr}.pc img,.pc .ph{width:72px;height:72px}}
 button.act.go{background:var(--okbg);color:var(--ok);border-color:var(--ok)}.fw{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--warnbg);color:var(--warn);margin-top:4px}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
+#ctl{position:sticky;top:0;z-index:5}#ctl .row{gap:0}button.act.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
+#ctl button.act{margin:4px 6px 0 0;padding:7px 12px}#lvl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}#lvl canvas{width:260px;height:190px;margin:0}
+dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:560px;width:calc(100% - 24px)}dialog::backdrop{background:#0009}
+.fm{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px 12px;margin-top:10px}.fm label{font-size:12px;color:var(--mute);display:grid;gap:3px}.fm label.ck{display:flex;gap:6px;align-items:center;color:var(--fg);font-size:14px}
+input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px;width:100%}
+#rs-out img{width:140px;height:140px;object-fit:contain;background:var(--pvbg);border-radius:8px}
+.md{font-size:15px;line-height:1.5;word-break:break-word}.md h1,.md h2,.md h3{margin:16px 0 6px;line-height:1.25}.md h1{font-size:22px}.md h2{font-size:18px}.md h3{font-size:16px}
+.md code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:13px}.md blockquote{margin:8px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--mute)}
+.md table{margin:8px 0;display:block;overflow-x:auto}.md th,.md td{border:1px solid var(--line);padding:5px 8px}.md ul,.md ol{padding-left:22px}.md hr{border:0;border-top:1px solid var(--line)}
+textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,monospace}
 </style></head><body><main>
 <h1>Printer <span id="upd">connecting...</span></h1>
-<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-pq" onclick="tab('pq')">Queue</button><button id="tb-pm" onclick="tab('pm')">Models</button><button id="tb-ph" onclick="tab('ph')">Past prints</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button></div>
+<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-pq" onclick="tab('pq')">Queue</button><button id="tb-pm" onclick="tab('pm')">Models</button><button id="tb-ph" onclick="tab('ph')">Past prints</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button><button id="tb-kn" onclick="tab('kn')">Knowledge</button></div>
+<section class="card" id="ctl"><div class="row">
+<button class="act" id="c-pause" onclick="ctl('/api/pause')">Pause</button><button class="act" id="c-resume" onclick="ctl('/api/resume')">Resume</button>
+<button class="act bad" id="c-stop" onclick="if(confirm('Stop the print? Heaters off, head lifts and parks. This cannot be resumed.'))ctl('/api/cancel')">Stop</button>
+<button class="act go" id="c-next" onclick="if(confirm('Start the next queued print? The bed must be clear.'))ctl('/api/queue/next')">Start next</button>
+<button class="act" id="c-retry" onclick="if(confirm('Reprint '+(CT.retry_name||'the last job')+'? The bed must be clear.'))ctl('/api/retry')">Retry last print</button>
+<button class="act" id="c-level" onclick="if(confirm('Check the bed? The printer homes, heats the bed to 70 C and probes (about 5 minutes). The bed must be empty.'))ctl('/api/level')">Check bed level</button>
+<button class="act" id="c-show" onclick="ctl('/api/level/show')">Last bed mesh</button>
+<button class="act" id="c-cool" onclick="ctl('/api/cooldown')">Cooldown</button></div>
+<div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></section>
 <div id="live">
 <section class="card hero">
   <img id="pv" alt="model preview" style="visibility:hidden">
@@ -66,8 +85,7 @@ button.act.go{background:var(--okbg);color:var(--ok);border-color:var(--ok)}.fw{
         <div><span>Layer</span><b id="layer">–</b></div><div><span>Z height</span><b id="z">–</b></div>
       </div>
     </div>
-    <div><button class="act" id="b-pause" onclick="post('/api/pause','m-ctl')">Pause</button><button class="act" id="b-resume" onclick="post('/api/resume','m-ctl')">Resume</button></div>
-    <div class="msg" id="m-ctl"></div>
+
   </div>
 </section>
 <section class="card"><div class="lab">Print queue (approved jobs)</div><div id="queue" style="margin-top:6px">–</div>
@@ -115,11 +133,23 @@ button.act.go{background:var(--okbg);color:var(--ok);border-color:var(--ok)}.fw{
 <div id="pm" class="hide">
 <section class="card"><div class="lab">Models: slice with the loaded filament and add to the queue (never starts a print)</div><div class="msg" id="pm-fil"></div><div class="msg" id="m-pm"></div><div id="pm-list" class="pcards">–</div></section>
 </div>
+<div id="kn" class="hide">
+<section class="card"><div class="lab">Knowledge: rules, filament guide, lessons, ideas (hub files)</div><div class="chips" id="kn-tabs"></div>
+<div class="row" style="margin-top:10px"><button class="act" id="kn-edit" onclick="knEdit()">Edit</button><button class="act go hide" id="kn-save" onclick="knSave()">Save</button><button class="act hide" id="kn-cancel" onclick="knCancel()">Cancel</button></div>
+<div class="msg" id="m-kn"></div><div id="kn-view" class="md" style="margin-top:10px"></div><textarea id="kn-ta" class="hide" spellcheck="false"></textarea></section>
+</div>
 <div id="ideas" class="hide">
 <section class="card"><div class="lab">Add an idea</div><div class="row" style="margin-top:8px"><input type="text" id="i-text" placeholder="print idea, #tags allowed"><select id="i-status"></select><button class="act" style="margin:0" onclick="addIdea()">Add</button></div><div class="msg" id="m-i"></div></section>
 <section class="card"><div class="lab">Ideas</div><div id="i-list" style="margin-top:6px">–</div></section>
 </div>
 </main>
+<dialog id="rs"><div class="lab">Reslice</div><div class="t" style="font-weight:600;word-break:break-word" id="rs-src"></div><div class="msg" id="rs-note"></div>
+<div class="fm"><label>Filament<select id="rs-fil"></select></label><label>Quality<select id="rs-q"></select></label>
+<label>Walls (blank = profile)<input type="number" id="rs-w" min="1" max="10"></label><label>Infill % (blank = profile)<input type="number" id="rs-i" min="0" max="100"></label>
+<label class="ck"><input type="checkbox" id="rs-brim">Brim</label><label class="ck"><input type="checkbox" id="rs-sup">Supports</label><label class="ck"><input type="checkbox" id="rs-ko">Keep orientation</label>
+<label>Pause at layer (optional)<input type="number" id="rs-pl" min="2"></label><label style="grid-column:span 2">Pause note (optional)<input type="text" id="rs-pn" placeholder="e.g. drop the ball in"></label></div>
+<div class="row" style="margin-top:12px"><button class="act go" id="rs-go" onclick="rsGo()">Slice</button><button class="act" onclick="$('rs').close()">Close</button></div>
+<div class="msg" id="rs-msg"></div><div id="rs-out" class="row" style="margin-top:8px;align-items:center"></div></dialog>
 <script>
 const $=id=>document.getElementById(id), D='–';
 const hist=[]; // {t,noz,bed,nt,bt}
@@ -133,7 +163,7 @@ function render(s){
   $('name').textContent=s.file||'No active job';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
   const pct=num(s.progress);$('pct').textContent=pct===null?D:Math.round(pct)+'%';
   $('arc').setAttribute('stroke-dashoffset',326.7*(1-(pct||0)/100));
-  theme();$('arc').setAttribute('stroke',st==='done'?COL.done:st==='failed'?COL.failed:st==='cancelled'?COL.cancelled:COL.acc);$('b-pause').disabled=st!=='printing';$('b-resume').disabled=st!=='paused';
+  theme();$('arc').setAttribute('stroke',st==='done'?COL.done:st==='failed'?COL.failed:st==='cancelled'?COL.cancelled:COL.acc);
   let el=num(s.elapsed_min),rem=num(s.remaining_min),printing=st==='printing';
   if(printing){const t0=parseStarted(s.started);if(t0)el=(Date.now()-t0)/60000}  // tick between 5 s writes
   if(rem===null&&printing&&pct>0&&el!==null)rem=el*(100-pct)/pct;
@@ -175,8 +205,8 @@ async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-st
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
 
 let curTab='live',histLoaded=0,H=null;
-function tab(t){curTab=t;for(const k of['live','hist','stats','ideas','pq','ph','pm']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
-  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else if(t==='pm'){pmLoad()}else chart()}
+function tab(t){curTab=t;for(const k of['live','hist','stats','ideas','pq','ph','pm','kn']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
+  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else if(t==='pm'){pmLoad()}else if(t==='kn'){knLoad()}else chart()}
 const COL={};let T={};
 function theme(){const cs=getComputedStyle(document.documentElement),g=k=>cs.getPropertyValue('--'+k).trim();
   Object.assign(T,{line:g('line'),mute:g('mute'),fg:g('fg')});Object.assign(COL,{done:g('ok'),cancelled:g('warn'),failed:g('bad'),acc:g('acc'),noz:g('noz')})}theme();
@@ -256,9 +286,9 @@ async function pqLoad(){let q;try{q=await (await fetch('/api/queue',{cache:'no-s
   $('pq-fil').innerHTML=await loadFil();
   $('pq-list').innerHTML=q.map((e,i)=>`<div class="pc${i?'':' head'}${e.missing?' miss':''}">${pic(e.job)}<div>
     <div class="t">${e.n}. ${esc(e.name)}</div>
-    <div class="m">${[+e.est_min>0&&mins(e.est_min),+e.grams>0&&(+e.grams).toFixed(1)+' g',e.filament,e.missing&&'G-code is gone: remove it',esc(e.note)].filter(Boolean).join(' · ')}</div>${fbadge(e.sliced)}
+    <div class="m">${[+e.est_min>0&&mins(e.est_min),+e.grams>0&&(+e.grams).toFixed(1)+' g',e.filament,e.missing&&'G-code is gone: remove it',(e.pause_at||[]).length&&'pauses before layer '+e.pause_at.join(', '),esc(e.note)].filter(Boolean).join(' · ')}</div>${fbadge(e.sliced)}
     <div class="btns"><button class="act" ${i?'':'disabled'} onclick="qMove(${e.n},${e.n-1},'${encodeURIComponent(e.name)}')">&uarr;</button><button class="act" ${i<q.length-1?'':'disabled'} onclick="qMove(${e.n},${e.n+1},'${encodeURIComponent(e.name)}')">&darr;</button>
-    <button class="act" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="qRemove(${e.n},'${encodeURIComponent(e.name)}')">Remove</button>
+    ${e.jid?`<button class="act" onclick="openReslice('job','${encodeURIComponent(e.jid)}')">Reslice</button>`:''}<button class="act" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="qRemove(${e.n},'${encodeURIComponent(e.name)}')">Remove</button>
     ${i?'':`<button class="act" onclick="qNext('${esc(e.sliced)}')">Print next now</button>`}</div></div></div>`).join('')||'The queue is empty.'}
 async function qMove(n,to,name){await post('/api/queue/move','m-pq',{n:n,to:to,name:decodeURIComponent(name)});pqLoad()}
 async function qRemove(n,name){if(!confirm('Remove #'+n+' from the queue?'))return;await post('/api/queue/remove','m-pq',{n:n,name:decodeURIComponent(name)});pqLoad()}
@@ -266,7 +296,7 @@ async function phLoad(){let h;try{h=await (await fetch('/api/history/cards',{cac
   await loadFil();
   $('ph-list').innerHTML=h.map(r=>`<div class="pc">${pic(r.job)}<div><div class="t">${esc(r.name)}</div>
     <div style="margin-top:4px"><span class="badge ${esc(r.status)}" style="margin:0">${esc(r.status)}</span> <span class="stars">${'&#9733;'.repeat(+r.rating||0)}</span></div>
-    <div class="m">${[esc(r.date).slice(0,16),+r.actual_min>0&&mins(r.actual_min),(+r.grams_used||+r.grams)>0&&(+r.grams_used||+r.grams).toFixed(1)+' g',esc(r.filament)].filter(Boolean).join(' · ')}</div>${fbadge(r.sliced)}${r.jid?`<div class="btns"><button class="act" onclick="hAdd('${encodeURIComponent(r.jid)}','${esc(r.sliced)}')">Add to queue</button></div>`:''}</div></div>`).join('')||'No prints yet.'}
+    <div class="m">${[esc(r.date).slice(0,16),+r.actual_min>0&&mins(r.actual_min),(+r.grams_used||+r.grams)>0&&(+r.grams_used||+r.grams).toFixed(1)+' g',esc(r.filament)].filter(Boolean).join(' · ')}</div>${fbadge(r.sliced)}${r.jid?`<div class="btns"><button class="act" onclick="hAdd('${encodeURIComponent(r.jid)}','${esc(r.sliced)}')">Add to queue</button><button class="act" onclick="openReslice('job','${encodeURIComponent(r.jid)}')">Reslice</button></div>`:''}</div></div>`).join('')||'No prints yet.'}
 // ---- models library ----
 const TASK={};
 async function pmLoad(){let m;try{m=await (await fetch('/api/models',{cache:'no-store'})).json()}catch(e){return}
@@ -275,7 +305,7 @@ async function pmLoad(){let m;try{m=await (await fetch('/api/models',{cache:'no-
     return `<div class="pc">${e.picture?`<img loading="lazy" src="/api/model.png?id=${id}" alt="">`:'<div class="ph">no picture</div>'}<div>
     <div class="t">${esc(e.name)}</div><div class="m">${esc(e.folder||'models')}</div>
     <div class="m" id="t-${id}">${esc(t.msg||'')}</div>
-    <div class="btns"><button class="act go" ${t.state==='running'||!LOADED.material?'disabled':''} onclick="mSlice('${id}')">Slice &amp; add to queue</button></div></div></div>`}).join('')||'No models found.'}
+    <div class="btns"><button class="act go" ${t.state==='running'||!LOADED.material?'disabled':''} onclick="mSlice('${id}')">Slice &amp; add to queue</button><button class="act" onclick="openReslice('model','${id}')">Reslice...</button></div></div></div>`}).join('')||'No models found.'}
 async function mSlice(id){const mid=decodeURIComponent(id),m=$('m-pm');
   try{const r=await fetch('/api/models/slice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:mid})});const j=await r.json();
     if(!j.task){m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.error||'failed');return}
@@ -319,5 +349,75 @@ async function loadIdeas(){let j;try{j=await (await fetch('/api/ideas',{cache:'n
     `<div class="idea"><span>#${i.id} ${esc(i.text)}${i.job?' <small>['+esc(i.job)+']</small>':''}</span><select onchange="moveIdea(${i.id},this.value)">${j.statuses.map(s=>`<option${s===i.status?' selected':''}>${s}</option>`).join('')}</select></div>`).join(''):''}).join('')||'no ideas yet'}
 async function addIdea(){const t=$('i-text').value.trim();if(!t)return;const j=await post('/api/ideas','m-i',{action:'add',text:t,status:$('i-status').value});if(j.ok){$('i-text').value='';loadIdeas()}}
 async function moveIdea(id,st){await post('/api/ideas','m-i',{action:'move',id:id,status:st});loadIdeas()}
-tick();logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);if(['hist','stats','ideas','pq','ph','pm'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
+// ---- controls bar ----
+let CT={},lvlSeen='';
+async function ctl(url){const m=$('m-bar');m.textContent='...';
+  try{const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:'{}'}),j=await r.json();
+    m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done');
+    tick();queueLoad();ctlLoad()}catch(e){m.textContent='failed: '+e}}
+async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-store'})).json();
+  for(const[k,id]of[['pause','c-pause'],['resume','c-resume'],['stop','c-stop'],['next','c-next'],['retry','c-retry'],['level','c-level'],['show','c-show'],['cooldown','c-cool']]){const b=$(id);b.disabled=!CT[k];b.title=CT[k]?'':(CT.why[k]||'')}
+  const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
+  $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');
+  if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now')}
+  else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when)}
+  }catch(e){}}
+function lvlDraw(grid,span,verdict,when){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');theme();
+  const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
+  const n=grid[0].length,cw=w/n,ch=h/grid.length;x.font='11px system-ui';x.textAlign='center';
+  grid.forEach((row,i)=>row.forEach((v,j)=>{const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?'#3ecf8e':v>0?`rgba(239,83,80,${.35+.65*a})`:`rgba(78,161,255,${.35+.65*a})`;
+    x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#000';x.fillText((v>0?'+':'')+v.toFixed(2),j*cw+cw/2,i*ch+ch/2+4)}));
+  $('lvl-txt').innerHTML='Bed mesh ('+esc(when||'')+'): span <b>'+(span==null?D:span.toFixed(2))+' mm</b> '+esc(verdict||'')+'<br>Seen from the front: back row on top. Red = bed high, blue = low, green = flat. Good under 0.30 mm, usable under 0.60.'}
+// ---- reslice form ----
+let RS=null,rsTimer=0;
+async function openReslice(kind,idEnc){const id=decodeURIComponent(idEnc);RS={kind,id,job:''};$('rs-out').innerHTML='';$('rs-msg').textContent='';
+  const r=await fetch('/api/reslice/defaults?'+kind+'='+encodeURIComponent(id),{cache:'no-store'}),j=await r.json();if(!r.ok){alert(j.error||'failed');return}
+  const st=j.settings;$('rs-src').textContent=j.source||id;$('rs-note').textContent=j.note||(j.recorded?'Defaults: this job\'s original settings.':'Defaults read from the job\'s process snapshot.');
+  $('rs-fil').innerHTML=j.filaments.map(f=>`<option ${f===st.filament?'selected':''}>${esc(f)}</option>`).join('');
+  $('rs-q').innerHTML=j.qualities.map(f=>`<option ${f===st.quality?'selected':''}>${esc(f)}</option>`).join('');
+  $('rs-w').value=st.walls;$('rs-i').value=st.infill;$('rs-brim').checked=!!st.brim;$('rs-sup').checked=!!st.supports;$('rs-ko').checked=!!st.keep_orient;$('rs-pl').value='';$('rs-pn').value='';
+  $('rs-go').disabled=kind==='job'&&!j.source;$('rs').showModal()}
+async function rsGo(){const m=$('rs-msg'),b={reslice:true,filament:$('rs-fil').value,quality:$('rs-q').value,walls:$('rs-w').value,infill:$('rs-i').value,brim:$('rs-brim').checked,supports:$('rs-sup').checked,keep_orient:$('rs-ko').checked};
+  b[RS.kind]=RS.id;m.textContent='slicing...';$('rs-out').innerHTML='';$('rs-go').disabled=true;
+  try{const r=await fetch('/api/models/slice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}),j=await r.json();
+    if(!j.task){m.textContent=r.status===403?'Not allowed from this device':(j.error||'failed');$('rs-go').disabled=false;return}
+    rsPoll(j.task)}catch(e){m.textContent='failed: '+e;$('rs-go').disabled=false}}
+async function rsPoll(tid){const m=$('rs-msg');try{const t=await (await fetch('/api/tasks/'+tid,{cache:'no-store'})).json();
+  if(t.state==='running'){m.textContent='slicing...';return setTimeout(()=>rsPoll(tid),2000)}
+  $('rs-go').disabled=false;if(t.state!=='done'){m.textContent='failed: '+t.msg;return}
+  RS.job=t.job;m.textContent='';$('rs-out').innerHTML=`<img src="/api/job/${encodeURIComponent(t.job)}/preview.png?${Date.now()}" alt=""><div><div>${esc(t.msg)}</div><div class="msg">${esc(t.job)}</div><button class="act go" onclick="rsAdd()">Add to queue</button></div>`}
+  catch(e){setTimeout(()=>rsPoll(tid),3000)}}
+async function rsAdd(){const pl=$('rs-pl').value,b={job:RS.job,note:$('rs-pn').value};if(pl)b.pause_at=[+pl];
+  const r=await fetch('/api/queue/add',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}),j=await r.json();
+  $('rs-msg').textContent=r.status===403?'Not allowed from this device':(j.ok||j.error||'failed');queueLoad();if(curTab==='pq')pqLoad()}
+// ---- knowledge tab ----
+let KN=null;
+const escH=t=>String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+function md(src){const inl=t=>escH(t).replace(/`([^`]+)`/g,'<code>$1</code>').replace(/\*\*([^*]+)\*\*/g,'<b>$1</b>').replace(/(^|[^*])\*([^*\s][^*]*)\*/g,'$1<i>$2</i>').replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const L=src.replace(/\r/g,'').split('\n'),o=[];let i=0;
+  const cells=l=>l.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+  while(i<L.length){const l=L[i];
+    if(/^\s*$/.test(l)){i++;continue}
+    let m;if(m=l.match(/^(#{1,6})\s+(.*)$/)){const n=Math.min(m[1].length,3);o.push(`<h${n}>${inl(m[2])}</h${n}>`);i++;continue}
+    if(/^\s*(---+|\*\*\*+)\s*$/.test(l)){o.push('<hr>');i++;continue}
+    if(/^\s*\|/.test(l)&&i+1<L.length&&/^\s*\|?\s*:?-+/.test(L[i+1])){const h=cells(l);i+=2;const rows=[];while(i<L.length&&/^\s*\|/.test(L[i]))rows.push(cells(L[i++]));
+      o.push('<table><thead><tr>'+h.map(c=>`<th>${inl(c)}</th>`).join('')+'</tr></thead><tbody>'+rows.map(r=>'<tr>'+r.map(c=>`<td>${inl(c)}</td>`).join('')+'</tr>').join('')+'</tbody></table>');continue}
+    if(/^\s*>/.test(l)){const b=[];while(i<L.length&&/^\s*>/.test(L[i]))b.push(L[i++].replace(/^\s*>\s?/,''));o.push('<blockquote>'+inl(b.join(' '))+'</blockquote>');continue}
+    if(/^\s*([-*]|\d+\.)\s+/.test(l)){const ord=/^\s*\d+\./.test(l),b=[];while(i<L.length&&/^\s*([-*]|\d+\.)\s+/.test(L[i]))b.push(L[i++].replace(/^\s*([-*]|\d+\.)\s+/,''));
+      o.push((ord?'<ol>':'<ul>')+b.map(x=>`<li>${inl(x)}</li>`).join('')+(ord?'</ol>':'</ul>'));continue}
+    if(/^```/.test(l)){const b=[];i++;while(i<L.length&&!/^```/.test(L[i]))b.push(L[i++]);i++;o.push('<pre><code>'+escH(b.join('\n'))+'</code></pre>');continue}
+    const b=[];while(i<L.length&&!/^\s*$/.test(L[i])&&!/^(#{1,6}\s|\s*\||\s*>|\s*([-*]|\d+\.)\s)/.test(L[i]))b.push(L[i++]);if(!b.length){b.push(L[i++])}o.push('<p>'+inl(b.join(' '))+'</p>')}
+  return o.join('\n')}
+async function knLoad(id){let l;try{l=await (await fetch('/api/knowledge',{cache:'no-store'})).json()}catch(e){return}
+  id=id||(KN&&KN.id)||l[0].id;$('kn-tabs').innerHTML=l.map(f=>`<button class="${f.id===id?'on':''}" onclick="knLoad('${f.id}')">${esc(f.title)}${f.exists?'':' (new)'}</button>`).join('');
+  const f=await (await fetch('/api/knowledge/file?id='+id,{cache:'no-store'})).json();KN={id:id,text:f.text||''};knShow(false)}
+function knShow(edit){$('kn-view').classList.toggle('hide',edit);$('kn-ta').classList.toggle('hide',!edit);$('kn-edit').classList.toggle('hide',edit);$('kn-save').classList.toggle('hide',!edit);$('kn-cancel').classList.toggle('hide',!edit);
+  if(edit)$('kn-ta').value=KN.text;else $('kn-view').innerHTML=KN.text.trim()?md(KN.text):'<span class="msg">empty: press Edit to write it</span>'}
+function knEdit(){knShow(true)}
+function knCancel(){knShow(false)}
+async function knSave(){const m=$('m-kn'),text=$('kn-ta').value;m.textContent='...';
+  try{const r=await fetch('/api/knowledge/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:KN.id,text:text})}),j=await r.json();
+    m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok?j.ok+' (previous version kept as .bak)':j.error||'failed');
+    if(j.ok){KN.text=text;knShow(false)}}catch(e){m.textContent='failed: '+e}}
+tick();ctlLoad();setInterval(ctlLoad,3000);logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);if(['hist','stats','ideas','pq','ph','pm','kn'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

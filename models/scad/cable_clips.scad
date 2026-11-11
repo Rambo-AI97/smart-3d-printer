@@ -3,13 +3,15 @@
 //  B  double snap clip: two cords side by side (bedside table)
 //  C  screw clip: one cable, one screw (under a desk, on a wall)
 //  D  reusable cable tie: tail with teeth through the head slot; squeeze teeth to release
+//  E  zip-tie mount (v2 2026-11-09): screw (or tape) it down, a zip tie (<=5 mm) threads through the
+//     tunnel over the screw head, both directions. Kit plate = layout "kit"
 cable_d = 4.2;     // USB-C / phone-charger cable ~3.5-4 mm
 ring    = 1.8;     // ring wall
 open_f  = 0.72;    // snap opening as a fraction of cable_d
 clip_w  = 10;      // clip length along the cable
 base_t  = 2.5;
 $fn = 48;
-layout  = "plate";   // "plate" | "A" | "B" | "C" | "D" (one piece)
+layout  = "kit";     // "kit" | "plate" | "A" | "B" | "C" | "D" | "E" (one piece)
 
 module snap2d(d = cable_d) {     // ring sitting on y = 0, opening at the top
   ro = d / 2 + ring;
@@ -54,7 +56,21 @@ module tieD(len = 120) {
   }
 }
 
+module mountE() {
+  m = 16;  h = 7.2;  tw = 5.6;  th = 2;  tz = 3.8;
+  difference() {
+    translate([-m / 2, -m / 2, 0]) linear_extrude(h) offset(2) offset(-2) square(m);
+    for (r = [0, 90]) rotate(r) translate([-m, -tw / 2, tz]) cube([2 * m, tw, th]);   // cross tunnels
+    translate([0, 0, -1]) cylinder(d = 3.8, h = 10);                                   // screw
+    translate([0, 0, 1.6]) cylinder(d = 7.6, h = 10);                                  // head + driver access
+  }
+}
+
 if (layout == "A") clipA();
+else if (layout == "E") mountE();
+else if (layout == "kit") {   // owner 2026-11-10: just the reusable ties, 4 lengths 80/120/160/200
+  for (i = [0 : 3]) translate([10, i * 14, 0]) rotate(-90) tieD(80 + 40 * i);
+}
 else if (layout == "B") clipB();
 else if (layout == "C") clipC();
 else if (layout == "D") tieD();

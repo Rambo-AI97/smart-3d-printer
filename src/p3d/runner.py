@@ -111,11 +111,14 @@ def q_save(q):
     os.replace(tmp, f)
 
 
-def q_add(q, gcode, note=""):
+def q_add(q, gcode, note="", pause_at=()):
     g = resolve_gcode(gcode)
     if job_meta(g).get("manual_z"):
         raise Refuse("manual-Z jobs (recover/add-on) need hands on the printer: start them with p3d print --confirm-z, not the queue")
-    q.append({"gcode": str(g), "name": g.parent.name, "note": note, "added": time.strftime("%Y-%m-%d %H:%M")})
+    e = {"gcode": str(g), "name": g.parent.name, "note": note, "added": time.strftime("%Y-%m-%d %H:%M")}
+    if pause_at:
+        e["pause_at"] = sorted({int(x) for x in pause_at})
+    q.append(e)
     return q
 
 
@@ -152,7 +155,7 @@ def queue_next(force=False, notify=False):
         head = q[0]
         if not pathlib.Path(head["gcode"]).exists():
             raise Refuse(f"{head['name']}: G-code is gone, remove it: p3d queue remove 1")
-        msg = start(head["gcode"], force=force, stop_cooldown=True)
+        msg = start(head["gcode"], force=force, pause_at=head.get("pause_at", []), stop_cooldown=True)
         q_save(q[1:])
         config.notify("Queued print started", f"{head['name']} (bed assumed clear)", "printer", quip_event="print_start")
         if notify:
@@ -165,14 +168,51 @@ def queue_next(force=False, notify=False):
         raise
 
 
+# ---- retry the last real job (dashboard button, `p3d retry`) ----
+
+SCRATCH_DIRS = ("/tmp/",)  # throw-away jobs are never retried
+NOT_REPRINTABLE = ("purge", "calib", "temp_tower", "retraction", "flow", "firstlayer")
+
+
+def last_reprintable():
+    """Newest print-log row whose G-code still exists and is a real job (no purge/calibration/scratch). None if there is none."""
+    import csv
+    try:
+        rows = list(csv.DictReader(open(config.get().data / "print_log.csv", newline="")))
+    except Exception:
+        return None
+    for r in reversed(rows):
+        f, n = r.get("file", ""), r.get("name", "")
+        if not f or f.startswith(SCRATCH_DIRS) or n.startswith(NOT_REPRINTABLE):
+            continue
+        if os.path.exists(f):
+            return {"name": n, "file": f, "est_min": r.get("est_min") or "", "status": r.get("status", "")}
+    return None
+
+
+def retry_last(notify=False):
+    """Reprint the newest real job. Assumes the bed is clear. Returns the message; raises Refuse."""
+    if config.print_cancellable():
+        raise Refuse("a print is running or heating")
+    r = last_reprintable()
+    if not r:
+        raise Refuse("no reprintable job found in the print log")
+    msg = start(r["file"], stop_cooldown=True)
+    config.notify("Retry started", f"{r['name']} (bed assumed clear)", "printer")
+    if notify:
+        config.desktop_notify("3D printer", f"Started {r['name']} (bed assumed clear)")
+    return msg
+
+
 def cmd_queue(a):
     try:
         q = q_load()
         if a.action == "add":
             if not a.arg:
                 raise Refuse("p3d queue add JOB_DIR|FILE.gcode [--note TEXT]")
-            q_save(q_add(q, a.arg, a.note or ""))
-            print(f"queued #{len(q)}: {q[-1]['name']}")
+            q_save(q_add(q, a.arg, a.note or "", getattr(a, "pause_at_layer", None) or []))
+            p = q[-1].get("pause_at")
+            print(f"queued #{len(q)}: {q[-1]['name']}" + (f"  (pauses before layer {', '.join(map(str, p))})" if p else ""))
         elif a.action == "remove":
             r = q_remove(q, int(a.arg or 0))
             q_save(q)
@@ -184,7 +224,7 @@ def cmd_queue(a):
             print(queue_next(a.force, a.notify))
         else:
             for n, e in enumerate(q, 1):
-                print(f"{n}. {e['name']}  {e.get('note', '')}")
+                print(f"{n}. {e['name']}  {e.get('note', '')}" + (f"  [pause before layer {', '.join(map(str, e['pause_at']))}]" if e.get("pause_at") else ""))
             if not q:
                 print("queue is empty")
     except Refuse as e:

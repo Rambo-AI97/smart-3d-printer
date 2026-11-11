@@ -197,6 +197,16 @@ def test_queue_next_stops_cooldown_and_starts(job, monkeypatch):
     assert started == ["p3d-print"] and stopped and runner.q_load() == []
 
 
+def test_queue_next_keeps_pause_layers(job, monkeypatch):
+    # a queued ball-pause job (rattle) must still pause: queue next used to drop pause_at
+    runner.q_save(runner.q_add([], str(job), "", [193]))
+    monkeypatch.setattr(config, "print_running", lambda: False)
+    monkeypatch.setattr(runner, "start_unit", lambda u, a: None)
+    runner.queue_next()
+    from p3d import pause
+    assert pause.read_pause_at() == [193]
+
+
 def test_queue_next_refuses_while_printing(job, monkeypatch):
     runner.q_save(runner.q_add([], str(job)))
     config.write_state(status="printing", job_id="x")
