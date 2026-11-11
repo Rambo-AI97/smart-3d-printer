@@ -4,10 +4,10 @@
 // Bottom-loading: 30 mm screw cap (P3, 45 deg flanks, 0.3 mm radial clearance), wide plinth base.
 // FDM / PETG: every surface <= 45 deg (checked by echo), walls >= 2.4 mm, no supports anywhere.
 // Holes: 90 deg countersink on top, 45 deg funnel lead-in underneath (short 3.4 mm bore, no clogging).
-// Print: body upright on its foot ring, cap flange-down. License CC BY-SA 4.0.
+// Print: body upright on its foot ring WITH BRIM, one body per plate, centre of bed; cap flange-down. License CC BY-SA 4.0.
 kind = "pepper";   // "pepper" | "salt"
 part = "plate";    // "body" | "cap" | "plate" (all 4 parts) | "pair" (assembled) | "cut" (cut-away) | "fit"
-n  = 180;          // segments around
+n  = 240;          // segments around (smooth diamond edges)
 dz = 0.4;          // ring spacing
 wall = 2.4;
 clear = 0.3;       // radial thread clearance (PETG)
@@ -17,9 +17,9 @@ P = 3; th = 1.2;  Rmin = 13.5;  Rmax = Rmin + th;  Lt = 10;   // female length i
 cap_t = 4;  spig = 9;                                         // cap flange thickness, spigot length
 
 // ---- per-kind design: profile [z, r], beads z, flutes [z0,z1,N,amp,twist], diamonds [zc,N,wz,D] ----
-PEP = [[0,24.2],[0.8,25],[4,25],[6,23.6],[9,21.4],[12,20.6],[16,19.2],[24,17.2],[34,15.3],[44,13.9],[52,13.5],
+PEP = [[0,24.6],[0.8,25],[4,25],[6,23.6],[9,21.4],[12,20.6],[16,19.2],[24,17.2],[34,15.3],[44,13.9],[52,13.5],
        [60,13.9],[68,15],[76,16.2],[84,16.6],[90,16.2],[95,14.8],[99,13.4],[103,13],[107,13.8],[110,14.6]];
-SAL = [[0,26.2],[0.8,27],[4,27],[6,25.6],[9,24.6],[14,25.6],[22,27.2],[30,27.2],[38,25.2],[46,21.6],[54,17.6],
+SAL = [[0,26.6],[0.8,27],[4,27],[6,25.6],[9,24.6],[14,25.6],[22,27.2],[30,27.2],[38,25.2],[46,21.6],[54,17.6],
        [60,15.2],[66,14.2],[72,14.2],[78,14.8],[83,15.8],[88,16.6]];
 prof  = kind == "pepper" ? PEP : SAL;
 H     = prof[len(prof) - 1][0];
