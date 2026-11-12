@@ -213,6 +213,8 @@ def cmd_queue(a):
             q_save(q_add(q, a.arg, a.note or "", getattr(a, "pause_at_layer", None) or []))
             p = q[-1].get("pause_at")
             print(f"queued #{len(q)}: {q[-1]['name']}" + (f"  (pauses before layer {', '.join(map(str, p))})" if p else ""))
+            from . import advisor
+            print(advisor.report(q[-1]["gcode"]))
         elif a.action == "remove":
             r = q_remove(q, int(a.arg or 0))
             q_save(q)

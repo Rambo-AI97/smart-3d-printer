@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Slice advisor: `p3d inspect` prints an Advice section (brim for tall parts, supports, heavy settings on small parts, placement and bed mesh, filament vs spool, long prints). `p3d.advisor.advise(info)` for reuse.
+  It also runs automatically after every `p3d slice`, `p3d queue add` and dashboard slice/reslice, so problems show before the preview (it caught a 50 mm part sliced without a brim on its first run).
+
 ## 1.1.0 (2026-11-12)
 
 **Printing**

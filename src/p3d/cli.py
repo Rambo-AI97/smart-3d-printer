@@ -262,6 +262,8 @@ def cmd_slice(a):
     ok, msg = spools.check(spools.load(), info.get("total filament used [g]"))
     if msg:
         print("spool:", msg)
+    from . import advisor
+    print(advisor.report(final))
 
 
 def _scad_src(name):
@@ -366,6 +368,8 @@ def cmd_inspect(a):
     print("filament by feature:", ", ".join(f"{k} {100 * v / tot:.0f}%" for k, v in feat.most_common(8)))
     if sup:
         print("support by height:", ", ".join(f"{k}-{k + 5}mm {100 * v / tot:.0f}%" for k, v in sorted(sup.items())))
+    from . import advisor
+    print(advisor.report(a.gcode))
 
 
 def _to_stl(src, out, length, flat=0.0, thicken=None, voxel=None):
@@ -609,7 +613,7 @@ COMMANDS = {
           A("--x", type=float, default=0.0, help="shift from the bed centre, mm"), A("--y", type=float, default=0.0),
           A("--part-bbox", help="X0,Y0,X1,Y1 of the existing part: allows automatic homing if it is clear of the Z probe point"),
           QUAL, FIL]),
-        ("inspect", cmd_inspect, "G-code breakdown: time, grams, feature share, supports", [A("gcode")]),
+        ("inspect", cmd_inspect, "G-code breakdown: time, grams, feature share, supports, advice", [A("gcode")]),
         ("pack", cmd_pack, "Printables upload pack: STL, .scad, render, pack.json",
          [A("model"), A("--part"), A("--dir", help="folder name (default: model with - for _)")]),
     ],

@@ -138,6 +138,16 @@ def stats():
 _INFO = {}
 
 
+def advice_note(gcode):
+    """' · advice: ...' for a slice result (empty when it looks good). Never raises."""
+    from .. import advisor
+    try:
+        lines = advisor.advise(advisor.gather(gcode))
+    except Exception:
+        return ""
+    return " · advice: " + "; ".join(lines) if lines else ""
+
+
 def gcode_facts(path):
     """est_min / grams / filament from the gcode header, cached by (path, mtime)."""
     try:
@@ -401,17 +411,18 @@ def slice_start(b, run=None):
             else:
                 from .. import cli
                 job_dir_, final, _ = cli.slice_model(path, filament=fil, **opts)
+            adv = advice_note(final)
             if reslice:
                 f = gcode_facts(str(final)) or {}
                 _task_end(tid, state="done", msg="sliced: " + " / ".join(
                     x for x in (f.get("est_min") and mins(f["est_min"]),
-                                f.get("grams") and f"{float(f['grams']):.1f} g", fil.upper()) if x),
+                                f.get("grams") and f"{float(f['grams']):.1f} g", fil.upper()) if x) + adv,
                     job=job_dir_.name, est_min=f.get("est_min", ""), grams=f.get("grams", ""), filament=fil)
             else:
                 with _TLOCK:
                     q = runner.q_add(runner.q_load(), final)
                     runner.q_save(q)
-                    _TASKS[tid].update(state="done", msg=f"queued #{len(q)}: {q[-1]['name']}", n=len(q), job=job_dir_.name)
+                    _TASKS[tid].update(state="done", msg=f"queued #{len(q)}: {q[-1]['name']}" + adv, n=len(q), job=job_dir_.name)
         except SystemExit as e:
             _task_end(tid, state="error", msg=str(e.code))
         except Exception as e:
