@@ -264,6 +264,11 @@ def cmd_slice(a):
         print("spool:", msg)
     from . import advisor
     print(advisor.report(final))
+    from .shot import _warning
+    w = _warning(pathlib.Path(final).parent)
+    if w:
+        print("SLICER WARNING:", w)
+    return final
 
 
 def _scad_src(name):
@@ -288,6 +293,21 @@ def cmd_scad(a):
                     "-o", str(out.with_suffix(".png")), str(src)], capture_output=True)
     print("stl:", out)
     print("preview:", out.with_suffix(".png"))
+    return out
+
+
+def cmd_shot(a):
+    from .shot import shot
+    print("shot:", shot(a.items, a.out))
+
+
+def cmd_make(a):
+    """scad -> STL -> slice (keep-orient) -> warnings -> small shot. One call per design iteration."""
+    stl = cmd_scad(argparse.Namespace(file=a.name, D=a.D, view=None))
+    a.model, a.keep_orient = str(stl), not a.orient
+    final = cmd_slice(a)
+    from .shot import shot
+    print("shot:", shot([pathlib.Path(final).parent]))
 
 
 def cmd_pack(a):
@@ -599,6 +619,13 @@ COMMANDS = {
         ("scad", cmd_scad, "OpenSCAD part -> STL + preview PNG",
          [A("file", help="NAME in models/scad, or a path"), A("-D", action="append", help="param=value (repeat)"),
           A("--view", action="append", help="extra -D only for the preview, e.g. 'part=\"assembly\"'")]),
+        ("make", cmd_make, "scad NAME -> STL -> slice (kept orientation) -> warnings + small shot JPG",
+         [A("name"), A("-D", action="append", help="param=value (repeat)"), QUAL, FIL,
+          A("--supports", action="store_true"), A("--brim", action="store_true"),
+          A("--walls", type=int), A("--infill", type=int),
+          A("--orient", action="store_true", help="let the slicer auto-rotate")]),
+        ("shot", cmd_shot, "small labelled JPG of job previews (to send to a phone)",
+         [A("items", nargs="+", help="job dirs, gcode, stl/scad or png"), A("-o", "--out")]),
         ("model", cmd_model, "any .glb/.obj/.fbx/.stl -> solid printable STL (Blender)",
          [A("src"), A("-o", "--out"), A("--length", type=float, default=85, help="longest side mm"),
           A("--flat", type=float, default=0.0, help="cut this fraction of the height off for a flat base"),
