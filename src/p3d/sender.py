@@ -336,7 +336,8 @@ def main(path):
         base = config.web_base()
         note_f = pathlib.Path(path).parent / "PAUSE_NOTE.txt"   # job-specific instruction (e.g. "drop the ball in")
         note = note_f.read_text().strip() + "\n\n" if note_f.exists() else ""
-        notify("Print paused", f"{note}{name} paused before layer {layer}. Resume when ready (wipe ooze off the nozzle first).", "pause_button",
+        notify("Print paused", f"{note}{name} paused before layer {layer}. Resume when ready (wipe ooze off the nozzle first).",
+               "pause_button",
                actions=f"http, Resume, {base}/api/resume, method=POST; http, Cancel, {base}/api/cancel, method=POST", urgent=True)
         c.resume.unlink(missing_ok=True)
         waited = 0

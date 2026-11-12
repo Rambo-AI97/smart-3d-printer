@@ -84,7 +84,7 @@ def instructions(kind, auto_home, z_ref, box, point, margin, extra=()):
         L += [f"Z homing: MANUAL (conservative), because {why}.",
               "The printer must NOT probe Z here: the probe would land on the part and every height would be wrong.",
               "1. Switch the printer on. Trim or scrape any blobs/strings off the top of the part so it is flat.",
-              f"2. Lower the nozzle by hand (screen: Prepare > Move > Z, small steps) until it just touches the top of the part,",
+              "2. Lower the nozzle by hand (screen: Prepare > Move > Z, small steps) until it just touches the top of the part,",
               f"   a paper-thin gap. The job treats that surface as Z = {z_ref:g} mm.",
               "3. Do not move X/Y afterwards. Keep your hand near the power switch for the first minute."]
     L += list(extra)

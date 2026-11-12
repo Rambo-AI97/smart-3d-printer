@@ -16,7 +16,8 @@ def mkq(tmp_path, names):
     for n in names:
         d = tmp_path / "data/jobs" / f"2026-{n}"
         d.mkdir(parents=True, exist_ok=True)
-        (d / f"{n}.gcode").write_text("; estimated printing time (normal mode) = 1h 5m 0s\n; total filament used [g] = 7.5\n; filament_type = PLA\n")
+        (d / f"{n}.gcode").write_text("; estimated printing time (normal mode) = 1h 5m 0s\n"
+                                      "; total filament used [g] = 7.5\n; filament_type = PLA\n")
         (d / "preview.png").write_bytes(b"\x89PNG")
         q.append({"gcode": str(d / f"{n}.gcode"), "name": d.name, "note": "x", "added": "t", "extra": 1})
     runner.q_save(q)
@@ -58,7 +59,8 @@ def serve(monkeypatch, remote=False):
 
 
 def call(h, path, body=None, method="POST"):
-    req = urllib.request.Request(f"http://127.0.0.1:{h.server_port}{path}", data=None if method == "GET" else json.dumps(body or {}).encode(), method=method)
+    req = urllib.request.Request(f"http://127.0.0.1:{h.server_port}{path}",
+                                 data=None if method == "GET" else json.dumps(body or {}).encode(), method=method)
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
             return r.status, r.read()

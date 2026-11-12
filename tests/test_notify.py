@@ -65,7 +65,8 @@ def test_dry_run_sends_nothing(posts, monkeypatch, capsys):
 
 
 def test_which_alerts_are_loud(monkeypatch):
-    """Done/cool/failed/cancelled/paused/warm/not-started/spool-low are urgent; resumed/queued-start are not (start is loud since 2026-11-09 spoken alerts)."""
+    """Done/cool/failed/cancelled/paused/warm/not-started/spool-low are urgent; resumed/queued-start are not
+    (start is loud since 2026-11-09 spoken alerts)."""
     import inspect
     import re
     from p3d import runner, spools
@@ -102,5 +103,6 @@ def test_spoken_line_short_and_readable():
     q = "Not bad for a machine that melts plastic."
     s = config.spoken("Print done", f"{q}\n\nphone_dock_v2: 112 min. Rate it: p3d rate 1-5", q)
     assert s == "Print done. phone dock v2: 112 min. " + q
-    assert config.spoken("Printer cool", "nozzle 42 C, bed 40 C, motors off. Safe to remove.") == "Printer cool. nozzle 42 C, bed 40 C, motors off."
+    assert (config.spoken("Printer cool", "nozzle 42 C, bed 40 C, motors off. Safe to remove.")
+            == "Printer cool. nozzle 42 C, bed 40 C, motors off.")
     assert len(config.spoken("x", "y" * 500)) <= 240

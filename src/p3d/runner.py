@@ -224,7 +224,8 @@ def cmd_queue(a):
             print(queue_next(a.force, a.notify))
         else:
             for n, e in enumerate(q, 1):
-                print(f"{n}. {e['name']}  {e.get('note', '')}" + (f"  [pause before layer {', '.join(map(str, e['pause_at']))}]" if e.get("pause_at") else ""))
+                pause_txt = f"  [pause before layer {', '.join(map(str, e['pause_at']))}]" if e.get("pause_at") else ""
+                print(f"{n}. {e['name']}  {e.get('note', '')}" + pause_txt)
             if not q:
                 print("queue is empty")
     except Refuse as e:

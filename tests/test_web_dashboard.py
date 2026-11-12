@@ -24,7 +24,8 @@ def hub(tmp_path, monkeypatch):
 def mkjob(tmp_path, name, proc=None, meta=None, model=None, fil="PETG"):
     d = tmp_path / "jobs" / name
     d.mkdir(parents=True, exist_ok=True)
-    (d / f"{name}.gcode").write_text(f"; estimated printing time (normal mode) = 10m 0s\n; total filament used [g] = 2.0\n; filament_type = {fil}\n")
+    (d / f"{name}.gcode").write_text(f"; estimated printing time (normal mode) = 10m 0s\n"
+                                      f"; total filament used [g] = 2.0\n; filament_type = {fil}\n")
     (d / "preview.png").write_bytes(b"\x89PNG")
     j = {"gcode": str(d / f"{name}.gcode")}
     if model:
@@ -65,7 +66,8 @@ def test_knowledge_save_atomic_with_bak_and_refusals(hub, monkeypatch):
     assert call(h, "/api/knowledge/save", {"id": "filaments", "text": "x"})[0] == 200
     assert not (f.parent / "filaments.md.bak").exists()
     # outside the allowlist, by id or by path
-    for bad in ({"id": "../../outside", "text": "x"}, {"id": "/tmp/evil.md", "text": "x"}, {"path": "/tmp/evil.md", "text": "x"}, {"id": "secrets", "text": "x"}):
+    for bad in ({"id": "../../outside", "text": "x"}, {"id": "/tmp/evil.md", "text": "x"},
+                {"path": "/tmp/evil.md", "text": "x"}, {"id": "secrets", "text": "x"}):
         assert call(h, "/api/knowledge/save", bad)[0] == 409
     assert call(h, "/api/knowledge/save", {"id": "rules"})[0] == 409  # no text
     assert call(h, "/api/knowledge/save", {"id": "rules", "text": "x" * 600000})[0] == 409
@@ -125,9 +127,9 @@ def test_reslice_task_passes_options_and_does_not_queue(hub, tmp_path, monkeypat
         return d, d / "2026-out.gcode"
     h = serve(monkeypatch)
     monkeypatch.setattr(server, "slice_start", lambda b, run=None, _o=server.slice_start: _o(b, run=fake))
-    std = server._process("standard")
-    st, body = call(h, "/api/models/slice", {"job": "2026-src", "filament": "pla", "quality": "fine", "walls": 4, "infill": 30, "brim": True,
-                                            "supports": True, "keep_orient": True})
+    server._process("standard")
+    st, body = call(h, "/api/models/slice", {"job": "2026-src", "filament": "pla", "quality": "fine", "walls": 4, "infill": 30,
+                                            "brim": True, "supports": True, "keep_orient": True})
     assert st == 202
     tid = json.loads(body)["task"]
     for _ in range(50):
@@ -148,8 +150,10 @@ def test_reslice_profile_values_are_not_overrides(hub, tmp_path, monkeypatch):
     mkjob(tmp_path, "2026-src", model=stl)
     std = server._process("standard")
     got = {}
-    monkeypatch.setattr(server.threading, "Thread", lambda target, daemon: type("T", (), {"start": lambda s: None})())
-    server.slice_start({"job": "2026-src", "filament": "petg", "walls": std["wall_loops"], "infill": str(std["sparse_infill_density"]).rstrip("%")},
+    monkeypatch.setattr(server.threading, "Thread",
+                        lambda target, daemon: type("T", (), {"start": lambda s: None})())
+    server.slice_start({"job": "2026-src", "filament": "petg", "walls": std["wall_loops"],
+                        "infill": str(std["sparse_infill_density"]).rstrip("%")},
                        run=lambda *a, **k: got.update(a=a, k=k))
     # task registered; options would be empty (checked via a second call after clearing)
     server._TASKS.clear()
@@ -218,7 +222,8 @@ def test_retry_and_level_refuse_while_printing(hub, tmp_path, monkeypatch):
     monkeypatch.setattr(runner, "start", lambda gc, **kw: started.append(gc) or "started")
     ran = []
     monkeypatch.setattr(server, "run_level", lambda args: ran.append(args) or (0, ""))
-    h = serve(monkeypatch)  # print_running -> True
+    h = serve(monkeypatch)
+    monkeypatch.setattr(config, "print_running", lambda: True)
     monkeypatch.setattr(config, "print_cancellable", lambda: True)
     assert call(h, "/api/retry")[0] == 409
     assert call(h, "/api/level")[0] == 409
@@ -248,8 +253,7 @@ def test_level_task_runs_and_parses(hub, monkeypatch):
     monkeypatch.setattr(server, "run_level", lambda args: seen.append(args) or (0, out))
     monkeypatch.setattr(config, "print_running", lambda: False)
     monkeypatch.setattr(config, "print_cancellable", lambda: False)
-    h = serve(monkeypatch)  # forces print_running True: undo below
-    monkeypatch.setattr(config, "print_running", lambda: False)
+    h = serve(monkeypatch)
     st, body = call(h, "/api/level")
     assert st == 202
     tid = json.loads(body)["task"]
@@ -267,7 +271,8 @@ def test_level_task_runs_and_parses(hub, monkeypatch):
 
 
 def test_level_last_falls_back_to_log(hub):
-    (config.get().data / "bed_mesh_log.csv").write_text("date,span_mm,grid_rows_front_to_back\n2026-01-01 10:00,0.2,+0.0 +0.1 | +0.2 +0.0\n")
+    (config.get().data / "bed_mesh_log.csv").write_text(
+        "date,span_mm,grid_rows_front_to_back\n2026-01-01 10:00,0.2,+0.0 +0.1 | +0.2 +0.0\n")
     server._TASKS.clear()
     r = server.level_last()
     assert r["span"] == 0.2 and r["grid"] == [[0.2, 0.0], [0.0, 0.1]] and r["verdict"] == "GOOD"

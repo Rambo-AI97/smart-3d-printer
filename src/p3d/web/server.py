@@ -1,5 +1,6 @@
 """Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except the POST endpoints
-(cancel, pause, resume, retry, cooldown, level, queue/next|move|remove|add, models/slice (also reslice), knowledge/save, ideas), allowed from localhost and config `cancel_from` / `control_from` IPs only."""
+(cancel, pause, resume, retry, cooldown, level, queue/next|move|remove|add, models/slice (also reslice), knowledge/save, ideas),
+allowed from localhost and config `cancel_from` / `control_from` IPs only."""
 import csv, json, os, pathlib, re, subprocess, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -351,7 +352,8 @@ def slice_start(b, run=None):
     if b.get("job"):
         path = job_source(str(b["job"]))
         if not path:
-            raise runner.Refuse("source model of this job was not recorded or is gone: slice it again from the Models tab (new slices record it)")
+            raise runner.Refuse("source model of this job was not recorded or is gone: "
+                                "slice it again from the Models tab (new slices record it)")
         mid = str(b["job"])
     else:
         known = {m["id"] for m in model_list()}
@@ -402,7 +404,8 @@ def slice_start(b, run=None):
             if reslice:
                 f = gcode_facts(str(final)) or {}
                 _task_end(tid, state="done", msg="sliced: " + " / ".join(
-                    x for x in (f.get("est_min") and mins(f["est_min"]), f.get("grams") and f"{float(f['grams']):.1f} g", fil.upper()) if x),
+                    x for x in (f.get("est_min") and mins(f["est_min"]),
+                                f.get("grams") and f"{float(f['grams']):.1f} g", fil.upper()) if x),
                     job=job_dir_.name, est_min=f.get("est_min", ""), grams=f.get("grams", ""), filament=fil)
             else:
                 with _TLOCK:
@@ -473,7 +476,8 @@ def level_start(show=False, bed=70, run=None):
             raise runner.Refuse(why)
     elif config.print_running():
         raise runner.Refuse("the printer port is busy (print or cooldown running)")
-    tid = _new_task("level", model="bed mesh" if show else "bed check", msg="reading the saved mesh..." if show else "heating, probing (about 5 minutes)...")
+    tid = _new_task("level", model="bed mesh" if show else "bed check",
+                    msg="reading the saved mesh..." if show else "heating, probing (about 5 minutes)...")
 
     def work():
         try:
@@ -505,7 +509,8 @@ def level_last():
             span = float(r["span_mm"])
         except (ValueError, KeyError):
             continue
-        return {"grid": grid, "span": span, "verdict": "GOOD" if span <= 0.30 else "OK" if span <= 0.60 else "NEEDS WORK", "when": r.get("date", "")}
+        return {"grid": grid, "span": span,
+                "verdict": "GOOD" if span <= 0.30 else "OK" if span <= 0.60 else "NEEDS WORK", "when": r.get("date", "")}
     return None
 
 
@@ -610,8 +615,10 @@ def queue_view():
     for n, e in enumerate(runner.q_load(), 1):
         g = e.get("gcode") or ""
         f = gcode_facts(g)
-        out.append({"n": n, "name": e.get("name"), "note": e.get("note", ""), "pause_at": e.get("pause_at", []), "added": e.get("added", ""),
-                    "missing": f is None, "job": job_id_of(g), "jid": job_folder(g), "sliced": gcode_filament(g), **(f or {"est_min": "", "grams": "", "filament": ""})})
+        out.append({"n": n, "name": e.get("name"), "note": e.get("note", ""),
+                    "pause_at": e.get("pause_at", []), "added": e.get("added", ""),
+                    "missing": f is None, "job": job_id_of(g), "jid": job_folder(g), "sliced": gcode_filament(g),
+                    **(f or {"est_min": "", "grams": "", "filament": ""})})
     return out
 
 
@@ -718,7 +725,8 @@ class H(BaseHTTPRequestHandler):
             self.send(json.dumps(knowledge_list()).encode(), "application/json")
         elif path == "/api/knowledge/file":
             try:
-                self.send(json.dumps(knowledge_read(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id", [""])[0])).encode(), "application/json")
+                qs = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                self.send(json.dumps(knowledge_read(qs.get("id", [""])[0])).encode(), "application/json")
             except runner.Refuse as e:
                 self.reply({"error": str(e)}, 404)
         elif path == "/api/log":
@@ -737,8 +745,9 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move", "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/ideas",
-                    "/api/retry", "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
+        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move",
+                        "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/ideas", "/api/retry",
+                        "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()

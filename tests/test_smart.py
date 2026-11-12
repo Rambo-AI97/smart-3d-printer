@@ -85,7 +85,7 @@ def test_sender_pauses_at_layer_and_resumes(fake_printer, tmp_path, monkeypatch)
     d.mkdir(parents=True)
     g = d / "p.gcode"
     g.write_text(LAYER_JOB)
-    pr = fake_printer()
+    fake_printer()
     pause.write_pause_at([2])
     real = sender.time.sleep
     calls = {"n": 0}

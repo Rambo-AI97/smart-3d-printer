@@ -6,7 +6,7 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def isolated(tmp_path, monkeypatch):
-    """Every test gets its own config/data/state dirs and no ntfy."""
+    """Every test gets its own config/data/state dirs, no ntfy and no systemd (no print running)."""
     monkeypatch.setenv("P3D_CONFIG", str(tmp_path / "cfg/config.toml"))
     monkeypatch.setenv("P3D_DATA", str(tmp_path / "data"))
     monkeypatch.setenv("P3D_STATE_DIR", str(tmp_path / "state"))
@@ -14,6 +14,8 @@ def isolated(tmp_path, monkeypatch):
     monkeypatch.setenv("P3D_PORT", "/dev/null-fake")
     from p3d import config
     monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "cfg/config.toml")
+    # never ask the host's systemd: a real print/cooldown on this machine must not change results
+    monkeypatch.setattr(config, "unit_active", lambda unit: False)
     config.reset()
     yield tmp_path
     config.reset()
