@@ -745,7 +745,8 @@ class H(BaseHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
-        if path not in ("/api/cancel", "/api/pause", "/api/resume", "/api/queue/next", "/api/queue/move",
+        if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
+                        "/api/queue/move",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/ideas", "/api/retry",
                         "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
             return self.send(b"not found", "text/plain", 404)
@@ -765,6 +766,13 @@ class H(BaseHTTPRequestHandler):
                 if not config.print_cancellable():
                     return self.reply({"ok": "nothing to pause"})
                 return self.reply({"ok": pause.request_pause()})
+            if path == "/api/pause/remove":
+                b = self.body()
+                try:
+                    layers = None if b.get("clear") else [int(b["layer"])]
+                except (KeyError, TypeError, ValueError):
+                    return self.reply({"error": "layer (integer) or clear:true required"}, 400)
+                return self.reply({"ok": pause.remove_pause_layers(layers)})
             if path == "/api/resume":
                 return self.reply({"ok": pause.request_resume()})
             if path in ("/api/retry", "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):

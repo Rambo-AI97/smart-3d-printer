@@ -272,3 +272,52 @@ def test_snapshot_columns_in_log(tmp_path):
     i = printlog.gcode_info(g)
     assert (i["bed_first"], i["bed_other"], i["walls"], i["infill"], i["travel_speed"]) == ("70", "60", "3", "15%", "200")
     assert len(i["profile_hash"]) == 8
+
+
+def _run_layer_job(fake_printer, tmp_path, monkeypatch, setup):
+    d = tmp_path / "data/jobs/jr"
+    d.mkdir(parents=True)
+    g = d / "p.gcode"
+    g.write_text(LAYER_JOB)
+    fake_printer()
+    pause.write_pause_at([2])
+    seen = {"paused": False}
+
+    def sleep(s):
+        if config.read_state().get("status") == "paused":
+            seen["paused"] = True
+            config.get().resume.touch()
+    monkeypatch.setattr(sender.time, "sleep", sleep)
+    orig = sender.Link.exchange
+    state = {"done": False}
+
+    def ex(self, n, cmd):
+        if not state["done"] and cmd.startswith("G1 Z0.2"):  # mid-print, before layer 2 starts
+            state["done"] = True
+            setup()
+        return orig(self, n, cmd)
+    monkeypatch.setattr(sender.Link, "exchange", ex)
+    sender.main(str(g))
+    return seen["paused"]
+
+
+def test_remove_layer_mid_print_no_pause(fake_printer, tmp_path, monkeypatch):
+    assert not _run_layer_job(fake_printer, tmp_path, monkeypatch, lambda: pause.remove_pause_layers([2]))
+
+
+def test_clear_mid_print_no_pause(fake_printer, tmp_path, monkeypatch):
+    assert not _run_layer_job(fake_printer, tmp_path, monkeypatch, lambda: pause.remove_pause_layers())
+
+
+def test_add_layer_mid_print_still_pauses(fake_printer, tmp_path, monkeypatch):
+    def setup():
+        pause.remove_pause_layers()
+        pause.request_pause([2])
+    assert _run_layer_job(fake_printer, tmp_path, monkeypatch, setup)
+
+
+def test_remove_layer_file_semantics(job):
+    pause.write_pause_at([2, 5, 9])
+    assert pause.remove_pause_layers([5]).endswith("2, 9") and pause.read_pause_at() == [2, 9]
+    pause.remove_pause_layers()
+    assert pause.read_pause_at() == []

@@ -64,6 +64,13 @@ def request_pause(at_layers=None):
     return "pause requested: the print stops at the next layer change"
 
 
+def remove_pause_layers(layers=None):
+    """Drop pending layer pauses (all when layers is None). The running sender re-reads the file at each layer change."""
+    left = [] if layers is None else [x for x in read_pause_at() if x not in {int(y) for y in layers}]
+    write_pause_at(left)
+    return "pending layer pauses: " + (", ".join(str(x) for x in left) or "none")
+
+
 def request_resume():
     c = config.get()
     if not config.read_state().get("status") == "paused":

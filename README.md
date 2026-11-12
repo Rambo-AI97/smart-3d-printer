@@ -4,7 +4,7 @@ Run a USB-connected 3D printer from the command line: slice a model, print it in
 watch it on a live phone-friendly dashboard, and keep a log of every print (time, filament, temperatures, your rating).
 Simple enough for an AI assistant to drive safely. Tested on a Creality **Ender-3 V3 SE** with stock Marlin firmware.
 
-![Live dashboard](docs/dashboard.png)
+<img src="docs/dashboard.png" width="32%" alt="Live tab with controls and bed mesh"> <img src="docs/dashboard-queue.png" width="32%" alt="Print queue"> <img src="docs/dashboard-stats.png" width="32%" alt="Stats">
 
 ## Quick start
 
@@ -26,13 +26,15 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 | Print | `p3d status [--json]` | current job, progress, temperatures |
 | | `p3d print FILE.gcode` | print in the background (survives closing the terminal) |
 | | `p3d print FILE --pause-at-layer N` | pause before layer N (magnets, colour swap); `--force` ignores a low spool |
-| | `p3d pause [--at-layer N]` / `p3d resume` | host-side pause at a layer change (retract, lift, park, heaters stay on) |
+| | `p3d pause [--at-layer N \| --remove-layer N \| --clear]` / `p3d resume` | host-side pause at a layer change (retract, lift, park, heaters stay on); `--remove-layer`/`--clear` cancel pending layer pauses mid-print |
 | | `p3d cancel` | safe stop: heaters off, lift, park |
-| | `p3d queue add JOB \| list \| remove N \| next` | queue of approved jobs; `next` starts the head (refuses while printing or when the spool is short) |
+| | `p3d queue add JOB \| list \| remove N \| move N M \| next` | queue of approved jobs; `next` starts the head (refuses while printing or when the spool is short) |
 | | `p3d wait layer\|done` | block until the first layer is down / the job ends (for scripts) |
+| | `p3d retry` / `p3d cooldown` | reprint the newest logged job / after a print: wait until cool, motors off, alert |
 | | `p3d web [--open]` | live dashboard URL (also for your phone) |
 | Design | `p3d slice MODEL [-q draft\|standard\|fine] [-f pla\|petg] [--supports] [--brim]` | model → G-code |
 | | `p3d scad NAME` | OpenSCAD part → STL + preview |
+| | `p3d model FILE` / `p3d game PRESET` | any .glb/.obj/.fbx/.stl → solid printable STL (Blender); a Godot game model by preset |
 | | `p3d inspect FILE.gcode` | where the time and filament go |
 | | `p3d pack NAME` | upload pack for Printables (STL, source, render) |
 | | `p3d recover JOB [--from-layer N \| --z MM]` | continue a failed print from its last good layer (writes a job, never prints) |
@@ -41,6 +43,7 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 | | `p3d calib temp\|retraction\|flow\|firstlayer` | make a calibration print |
 | | `p3d pid` / `p3d probe` | PID-tune heaters / read-only firmware check |
 | Data | `p3d log`, `p3d history`, `p3d rate` | job log, totals, ratings (issue tags print a concrete next step) |
+| | `p3d import-history` | add past G-code files found on this PC to the log |
 | | `p3d suggest`, `p3d stats` | recurring issues with fixes; success, rating, grams, hours per week and when settings changed |
 | | `p3d spool add\|list\|use\|set` | filament spools; grams are deducted when a job ends (done = all, stopped = share printed) |
 | | `p3d idea add\|list\|move\|done` | print ideas in a hand-editable `ideas.md` |
@@ -78,13 +81,43 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 
 ## Models
 
-Parts designed and printed with this tool (OpenSCAD sources in `models/scad/`), CC BY-SA 4.0:
+Parts designed and printed with this tool, CC BY-SA 4.0. Sources in `models/scad/`:
+`p3d scad NAME` renders one, `p3d slice` slices it. Published on Printables:
+[monitor stand](https://www.printables.com/model/1905054), [stroller cup holder](https://www.printables.com/model/1905061).
 
-- [Monitor stand](https://www.printables.com/model/1905054)
-- [Stroller cup holder](https://www.printables.com/model/1905061)
+**Kitchen**
+
+| <img src="docs/models/grinder_funnel.png" width="180" alt="Grinder pour collar"> | <img src="docs/models/coffee_scoop.png" width="180" alt="Coffee scoop + funnel"> | <img src="docs/models/shakers.png" width="180" alt="Salt & pepper shakers"> | <img src="docs/models/tea_box.png" width="180" alt="Tea bag box"> | <img src="docs/models/sink_brush_holder.png" width="180" alt="Sink brush holder"> |
+|---|---|---|---|---|
+| [Grinder pour collar](models/scad/grinder_funnel.scad) | [Coffee scoop + funnel](models/scad/coffee_scoop.scad) | [Salt & pepper shakers](models/scad/shakers.scad) | [Tea bag box](models/scad/tea_box.scad) | [Sink brush holder](models/scad/sink_brush_holder.scad) |
+
+**Baby & stroller**
+
+| <img src="docs/models/baby_rattle_v4.png" width="180" alt="Rattle (V4, prints lying down)"> | <img src="docs/models/stroller_cup.png" width="180" alt="Stroller cup holder"> | <img src="docs/models/stroller_cup_ext.png" width="180" alt="Tall-bottle extension"> | <img src="docs/models/monitor_stand.png" width="180" alt="Baby monitor kickstand"> |
+|---|---|---|---|
+| [Rattle (V4, prints lying down)](models/scad/baby_rattle_v4.scad) | [Stroller cup holder](models/scad/stroller_cup.scad) | [Tall-bottle extension](models/scad/stroller_cup_ext.scad) | [Baby monitor kickstand](models/scad/monitor_stand.scad) |
+
+**Dog walks**
+
+| <img src="docs/models/bag_holder.png" width="180" alt="Bag roll holder (leash)"> | <img src="docs/models/bag_clip.png" width="180" alt="Used-bag clip"> | <img src="docs/models/dog_frisbee.png" width="180" alt="Frisbee"> |
+|---|---|---|
+| [Bag roll holder (leash)](models/scad/bag_holder.scad) | [Used-bag clip](models/scad/bag_clip.scad) | [Frisbee](models/scad/dog_frisbee.scad) |
+
+**Desk & everyday**
+
+| <img src="docs/models/phone_dock.png" width="180" alt="Phone dock"> | <img src="docs/models/radio_dock.png" width="180" alt="Cathedral radio dock"> | <img src="docs/models/stave_stand.png" width="180" alt="Stave phone stand (4 angles)"> | <img src="docs/models/card_wallet.png" width="180" alt="6-card wallet"> | <img src="docs/models/cable_clips.png" width="180" alt="Cable clips"> | <img src="docs/models/edge_cable_clip.png" width="180" alt="Table-edge cable clip"> |
+|---|---|---|---|---|---|
+| [Phone dock](models/scad/phone_dock.scad) | [Cathedral radio dock](models/scad/radio_dock.scad) | [Stave phone stand (4 angles)](models/scad/stave_stand.scad) | [6-card wallet](models/scad/card_wallet.scad) | [Cable clips](models/scad/cable_clips.scad) | [Table-edge cable clip](models/scad/edge_cable_clip.scad) |
+
+**Printer tools**
+
+| <img src="docs/models/bed_scraper.png" width="180" alt="Bed scraper"> | <img src="docs/models/fit_rings.png" width="180" alt="Fit-test rings"> |
+|---|---|
+| [Bed scraper](models/scad/bed_scraper.scad) | [Fit-test rings](models/scad/fit_rings.scad) |
 
 ## More
 
+- [Changelog](CHANGELOG.md): what changed in each version
 - [Data recorded](docs/data.md): log columns, per-print samples, where files live
 - [Calibration](docs/calibration.md): which tests, in which order, and the values found
 - [Game models](docs/game-models.md): turning a Godot/Blender model into a printable STL

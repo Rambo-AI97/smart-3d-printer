@@ -65,7 +65,9 @@ def cmd_pause(a):
     from . import pause
     if not config.print_cancellable():
         sys.exit("no print running")
-    if a.at_layer:
+    if a.clear or a.remove_layer:
+        print(pause.remove_pause_layers(None if a.clear else a.remove_layer))
+    elif a.at_layer:
         print(pause.request_pause(a.at_layer))
     elif read_state().get("status") == "paused":
         print("already paused (p3d resume)")
@@ -560,8 +562,11 @@ COMMANDS = {
           A("--force", action="store_true", help="print even if the active spool has too little filament"),
           A("--pause-at-layer", type=int, action="append", metavar="N", help="pause before layer N (magnets, colour swap); repeat"),
           A("--confirm-z", action="store_true", help="recover/add-on job: I put the nozzle on the part top (manual Z)")]),
-        ("pause", cmd_pause, "pause at the next layer change (park, keep heaters); --at-layer N for a chosen layer",
-         [A("--at-layer", type=int, action="append", metavar="N")]),
+        ("pause", cmd_pause, "pause at the next layer change (park, keep heaters); --at-layer N for a chosen layer; "
+         "--remove-layer N / --clear drop pending layer pauses",
+         [A("--at-layer", type=int, action="append", metavar="N"),
+          A("--remove-layer", type=int, action="append", metavar="N", help="cancel the pending pause before layer N; repeat"),
+          A("--clear", action="store_true", help="cancel all pending layer pauses")]),
         ("resume", cmd_resume, "continue a paused print", []),
         ("cancel", cmd_cancel, "safe stop: heaters off, lift, park", []),
         ("queue", cmd_queue, "approved jobs: add JOB | list | remove N | move N M | next (starts the head; bed must be clear)",

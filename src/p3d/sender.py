@@ -320,7 +320,8 @@ def main(path):
         if not layer:
             return False
         c = config.get()
-        pause_at.update(pause.read_pause_at())
+        pause_at.clear()
+        pause_at.update(pause.read_pause_at())  # the file is the truth: adds AND removals show up
         if not pause.due(layer, c.pause.exists(), pause_at):
             return False
         cmds_ = pause.pause_cmds(pos, c.park_y)

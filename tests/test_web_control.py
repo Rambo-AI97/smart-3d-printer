@@ -62,3 +62,13 @@ def test_control_forbidden_from_other_ip(monkeypatch):
         assert post(h, p, {"action": "add", "text": "x"})[0] == 403
     assert not config.get().pause.exists()
     h.shutdown()
+
+
+def test_pause_remove_endpoint(monkeypatch):
+    from p3d import pause
+    h = serve(monkeypatch)
+    pause.write_pause_at([4, 7])
+    assert post(h, "/api/pause/remove", {"layer": 4})[0] == 200 and pause.read_pause_at() == [7]
+    assert post(h, "/api/pause/remove", {})[0] == 400
+    assert post(h, "/api/pause/remove", {"clear": True})[0] == 200 and pause.read_pause_at() == []
+    h.shutdown()
