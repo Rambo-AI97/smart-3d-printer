@@ -10,11 +10,9 @@ jobs/
 state.json
 STOP
 data/
-# private models stay local: only models/scad/*.scad sources are shared
-models/*/
-!models/scad/
-models/scad/*.stl
-models/scad/*.png
+# models stay local: this repo is the software only
+models/
+docs/models/
 .privacy-blocklist
 
 # personal (phone number / private use): never publish

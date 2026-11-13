@@ -82,39 +82,9 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 
 ## Models
 
-Parts designed and printed with this tool, CC BY-SA 4.0. Sources in `models/scad/`:
-`p3d scad NAME` renders one, `p3d slice` slices it. Published on Printables:
+Put your own OpenSCAD parts in `models/scad/` (not tracked in this repo): `p3d scad NAME` renders one,
+`p3d make NAME` renders + slices it. Some parts made with this tool are on Printables:
 [monitor stand](https://www.printables.com/model/1905054), [stroller cup holder](https://www.printables.com/model/1905061).
-
-**Kitchen**
-
-| <img src="docs/models/grinder_funnel.png" width="180" alt="Grinder pour collar"> | <img src="docs/models/coffee_scoop.png" width="180" alt="Coffee scoop + funnel"> | <img src="docs/models/shakers.png" width="180" alt="Salt & pepper shakers"> | <img src="docs/models/tea_box.png" width="180" alt="Tea bag box"> | <img src="docs/models/sink_brush_holder.png" width="180" alt="Sink brush holder"> |
-|---|---|---|---|---|
-| [Grinder pour collar](models/scad/grinder_funnel.scad) | [Coffee scoop + funnel](models/scad/coffee_scoop.scad) | [Salt & pepper shakers](models/scad/shakers.scad) | [Tea bag box](models/scad/tea_box.scad) | [Sink brush holder](models/scad/sink_brush_holder.scad) |
-
-**Baby & stroller**
-
-| <img src="docs/models/baby_rattle_v4.png" width="180" alt="Rattle (V4, prints lying down)"> | <img src="docs/models/stroller_cup.png" width="180" alt="Stroller cup holder"> | <img src="docs/models/stroller_cup_ext.png" width="180" alt="Tall-bottle extension"> | <img src="docs/models/monitor_stand.png" width="180" alt="Baby monitor kickstand"> |
-|---|---|---|---|
-| [Rattle (V4, prints lying down)](models/scad/baby_rattle_v4.scad) | [Stroller cup holder](models/scad/stroller_cup.scad) | [Tall-bottle extension](models/scad/stroller_cup_ext.scad) | [Baby monitor kickstand](models/scad/monitor_stand.scad) |
-
-**Dog walks**
-
-| <img src="docs/models/bag_holder.png" width="180" alt="Bag roll holder (leash)"> | <img src="docs/models/bag_clip.png" width="180" alt="Used-bag clip"> | <img src="docs/models/dog_frisbee.png" width="180" alt="Frisbee"> |
-|---|---|---|
-| [Bag roll holder (leash)](models/scad/bag_holder.scad) | [Used-bag clip](models/scad/bag_clip.scad) | [Frisbee](models/scad/dog_frisbee.scad) |
-
-**Desk & everyday**
-
-| <img src="docs/models/phone_dock.png" width="180" alt="Phone dock"> | <img src="docs/models/radio_dock.png" width="180" alt="Cathedral radio dock"> | <img src="docs/models/stave_stand.png" width="180" alt="Stave phone stand (4 angles)"> | <img src="docs/models/card_wallet.png" width="180" alt="6-card wallet"> | <img src="docs/models/cable_clips.png" width="180" alt="Cable clips"> | <img src="docs/models/edge_cable_clip.png" width="180" alt="Table-edge cable clip"> |
-|---|---|---|---|---|---|
-| [Phone dock](models/scad/phone_dock.scad) | [Cathedral radio dock](models/scad/radio_dock.scad) | [Stave phone stand (4 angles)](models/scad/stave_stand.scad) | [6-card wallet](models/scad/card_wallet.scad) | [Cable clips](models/scad/cable_clips.scad) | [Table-edge cable clip](models/scad/edge_cable_clip.scad) |
-
-**Printer tools**
-
-| <img src="docs/models/bed_scraper.png" width="180" alt="Bed scraper"> | <img src="docs/models/fit_rings.png" width="180" alt="Fit-test rings"> |
-|---|---|
-| [Bed scraper](models/scad/bed_scraper.scad) | [Fit-test rings](models/scad/fit_rings.scad) |
 
 ## More
 
