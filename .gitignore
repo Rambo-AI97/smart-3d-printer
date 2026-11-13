@@ -21,3 +21,4 @@ models/scad/*.png
 models/scad/dog_tag.scad
 models/scad/walk_kit.scad
 models/scad/coffee_plate.*
+models/.trash/

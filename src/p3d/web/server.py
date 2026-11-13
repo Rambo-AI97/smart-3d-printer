@@ -1,7 +1,7 @@
 """Print dashboard: `p3d web` (service p3d-web). Stdlib only. Read-only except the POST endpoints
 (cancel, pause, resume, retry, cooldown, level, queue/next|move|remove|add, models/slice (also reslice), knowledge/save, ideas),
 allowed from localhost and config `cancel_from` / `control_from` IPs only."""
-import csv, json, os, pathlib, re, subprocess, sys, threading, time, urllib.parse
+import csv, datetime, json, os, pathlib, re, subprocess, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from .. import config, ideas, insights, pause, printlog, runner, spools
@@ -242,13 +242,35 @@ def models_dir():
 
 
 def model_list():
-    """Printable library: every *.stl under models/ (id = path relative to it), with the sibling .png if present."""
+    """Printable library, newest first: every *.stl under models/ (id = path relative to it), with the sibling .png
+    if present. Hidden folders (.trash) are skipped."""
     root, out = models_dir(), []
-    for p in sorted(root.rglob("*.stl")) if root.is_dir() else []:
+    for p in root.rglob("*.stl") if root.is_dir() else []:
         rel = p.relative_to(root)
+        if any(part.startswith(".") for part in rel.parts):
+            continue
+        mt = p.stat().st_mtime
         out.append({"id": rel.as_posix(), "name": p.stem, "folder": rel.parent.as_posix() if rel.parent.as_posix() != "." else "",
-                    "picture": p.with_suffix(".png").is_file()})
-    return out
+                    "picture": p.with_suffix(".png").is_file(), "mtime": mt,
+                    "date": datetime.datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")})
+    return sorted(out, key=lambda m: -m["mtime"])
+
+
+def model_delete(b):
+    """Move a library model (its .stl and same-stem .png/.scad/.3mf siblings) to models/.trash/ (recoverable)."""
+    mid = str(b.get("id") or "")
+    if mid not in {m["id"] for m in model_list()}:
+        raise runner.Refuse("unknown model")
+    root = models_dir()
+    stl = root / mid
+    trash = root / ".trash" / datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    trash.mkdir(parents=True, exist_ok=True)
+    moved = []
+    for f in [stl, *(stl.with_suffix(x) for x in (".png", ".3mf"))]:
+        if f.is_file():
+            f.rename(trash / f.name)
+            moved.append(f.name)
+    return f"deleted {stl.stem} (moved {len(moved)} file(s) to models/.trash)"
 
 
 _TASKS, _TLOCK = {}, threading.Lock()
@@ -758,7 +780,7 @@ class H(BaseHTTPRequestHandler):
         path = self.path.split("?")[0]
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
                         "/api/queue/move",
-                        "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/ideas", "/api/retry",
+                        "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
                         "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
@@ -809,6 +831,11 @@ class H(BaseHTTPRequestHandler):
             if path == "/api/queue/add":
                 try:
                     return self.reply({"ok": queue_add(self.body())})
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            if path == "/api/models/delete":
+                try:
+                    return self.reply({"ok": model_delete(self.body())})
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
             if path == "/api/models/slice":

@@ -307,3 +307,27 @@ def test_cooldown_starts_unit(hub, monkeypatch):
     h = serve(monkeypatch)
     assert call(h, "/api/cooldown")[0] == 200 and units == ["p3d-cooldown"]
     h.shutdown()
+
+
+def test_models_newest_first_and_delete_to_trash(hub, tmp_path, monkeypatch):
+    lib = tmp_path / "lib"
+    (lib / "scad").mkdir(parents=True)
+    old, new = lib / "old.stl", lib / "scad/new.stl"
+    old.write_text("solid")
+    new.write_text("solid")
+    (lib / "scad/new.png").write_bytes(b"\x89PNG")
+    (lib / "scad/new.scad").write_text("cube(1);")
+    import os
+    os.utime(old, (1_000_000, 1_000_000))
+    monkeypatch.setenv("P3D_MODELS_LIB", str(lib))
+    h = serve(monkeypatch)
+    ids = [m["id"] for m in json.loads(call(h, "/api/models", method="GET")[1])]
+    assert ids == ["scad/new.stl", "old.stl"]
+    st, body = call(h, "/api/models/delete", {"id": "scad/new.stl"})
+    assert st == 200 and "deleted new" in json.loads(body)["ok"]
+    assert not new.exists() and not (lib / "scad/new.png").exists() and (lib / "scad/new.scad").exists()
+    assert len(list((lib / ".trash").rglob("new.stl"))) == 1
+    assert [m["id"] for m in json.loads(call(h, "/api/models", method="GET")[1])] == ["old.stl"]  # trash hidden
+    assert call(h, "/api/models/delete", {"id": "../etc/passwd"})[0] == 409
+    assert call(serve(monkeypatch, remote=True), "/api/models/delete", {"id": "old.stl"})[0] == 403
+    assert old.exists()

@@ -58,10 +58,16 @@ input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--l
 .md{font-size:15px;line-height:1.5;word-break:break-word}.md h1,.md h2,.md h3{margin:16px 0 6px;line-height:1.25}.md h1{font-size:22px}.md h2{font-size:18px}.md h3{font-size:16px}
 .md code{background:var(--bg);padding:1px 5px;border-radius:5px;font-size:13px}.md blockquote{margin:8px 0;padding:2px 12px;border-left:3px solid var(--line);color:var(--mute)}
 .md table{margin:8px 0;display:block;overflow-x:auto}.md th,.md td{border:1px solid var(--line);padding:5px 8px}.md ul,.md ol{padding-left:22px}.md hr{border:0;border-top:1px solid var(--line)}
+.sub{display:flex;gap:6px;flex-wrap:wrap;margin-top:-4px}.sub button{background:none;color:var(--mute);border:0;border-bottom:2px solid transparent;padding:6px 10px;font:inherit;font-size:14px;cursor:pointer}
+.sub button.on{color:var(--fg);border-bottom-color:var(--acc)}
+.pc img,#pv{cursor:zoom-in}dialog#lb{max-width:min(96vw,900px);padding:10px}#lb img{width:100%;max-height:78vh;object-fit:contain;background:var(--pvbg);border-radius:10px;display:block}
+#lb .row{justify-content:space-between;align-items:center;margin-top:8px}
+button.act.del{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
 textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,monospace}
 </style></head><body><main>
 <h1>Printer <span id="upd">connecting...</span></h1>
-<div class="tabs"><button id="tb-live" class="on" onclick="tab('live')">Live</button><button id="tb-hist" onclick="tab('hist')">History</button><button id="tb-stats" onclick="tab('stats')">Stats</button><button id="tb-pq" onclick="tab('pq')">Queue</button><button id="tb-pm" onclick="tab('pm')">Models</button><button id="tb-ph" onclick="tab('ph')">Past prints</button><button id="tb-ideas" onclick="tab('ideas')">Ideas</button><button id="tb-kn" onclick="tab('kn')">Knowledge</button></div>
+<div class="tabs"><button id="tg-live" class="on" onclick="tab('live')">Live</button><button id="tg-prints" onclick="tab(LASTSUB.prints)">Prints</button><button id="tg-charts" onclick="tab(LASTSUB.charts)">Stats</button><button id="tg-notes" onclick="tab(LASTSUB.notes)">Notes</button></div>
+<div class="sub hide" id="sub"></div>
 <section class="card" id="ctl"><div class="row">
 <button class="act" id="c-pause" onclick="ctl('/api/pause')">Pause</button><button class="act" id="c-resume" onclick="ctl('/api/resume')">Resume</button>
 <button class="act bad" id="c-stop" onclick="if(confirm('Stop the print? Heaters off, head lifts and parks. This cannot be resumed.'))ctl('/api/cancel')">Stop</button>
@@ -73,7 +79,7 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></section>
 <div id="live">
 <section class="card hero">
-  <img id="pv" alt="model preview" style="visibility:hidden">
+  <img id="pv" alt="model preview" style="visibility:hidden" onclick="zoom(this.src,$('name').textContent)">
   <div>
     <span class="badge" id="badge">idle</span>
     <div class="name" id="name">No active job</div>
@@ -143,6 +149,7 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <section class="card"><div class="lab">Ideas</div><div id="i-list" style="margin-top:6px">–</div></section>
 </div>
 </main>
+<dialog id="lb" onclick="if(event.target===this)this.close()"><img id="lb-img" alt=""><div class="row"><b id="lb-t" style="word-break:break-word"></b><button class="act" style="margin:0" onclick="$('lb').close()">Close</button></div></dialog>
 <dialog id="rs"><div class="lab">Reslice</div><div class="t" style="font-weight:600;word-break:break-word" id="rs-src"></div><div class="msg" id="rs-note"></div>
 <div class="fm"><label>Filament<select id="rs-fil"></select></label><label>Quality<select id="rs-q"></select></label>
 <label>Walls (blank = profile)<input type="number" id="rs-w" min="1" max="10"></label><label>Infill % (blank = profile)<input type="number" id="rs-i" min="0" max="100"></label>
@@ -205,7 +212,13 @@ async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-st
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
 
 let curTab='live',histLoaded=0,H=null;
-function tab(t){curTab=t;for(const k of['live','hist','stats','ideas','pq','ph','pm','kn']){$(k).classList.toggle('hide',k!==t);$('tb-'+k).classList.toggle('on',k===t)}
+const GROUPS={live:['live'],prints:['pq','pm','ph'],charts:['stats','hist'],notes:['ideas','kn']},
+  LABEL={pq:'Queue',pm:'Models',ph:'Past prints',stats:'Charts',hist:'History',ideas:'Ideas',kn:'Knowledge'},LASTSUB={prints:'pq',charts:'stats',notes:'ideas'};
+function tab(t){curTab=t;const grp=Object.keys(GROUPS).find(g=>GROUPS[g].includes(t))||'live';if(grp!=='live')LASTSUB[grp]=t;
+  for(const g in GROUPS)$('tg-'+g).classList.toggle('on',g===grp);
+  for(const k of['live','hist','stats','ideas','pq','ph','pm','kn'])$(k).classList.toggle('hide',k!==t);
+  const sb=$('sub');sb.classList.toggle('hide',grp==='live');sb.innerHTML=grp==='live'?'':GROUPS[grp].map(k=>`<button class="${k===t?'on':''}" onclick="tab('${k}')">${LABEL[k]}</button>`).join('');
+  history.replaceState(null,'',t==='live'?location.pathname:'#'+t);
   if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else if(t==='pm'){pmLoad()}else if(t==='kn'){knLoad()}else chart()}
 const COL={};let T={};
 function theme(){const cs=getComputedStyle(document.documentElement),g=k=>cs.getPropertyValue('--'+k).trim();
@@ -272,7 +285,8 @@ async function post(url,msgId,body){const m=$(msgId);m.textContent='...';
 async function queueLoad(){try{const q=await (await fetch('/api/queue',{cache:'no-store'})).json();
   $('queue').innerHTML=q.map(e=>`<div class="idea"><span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
 // ---- queue page, past prints page ----
-const pic=j=>j?`<img loading="lazy" src="/api/job/${encodeURIComponent(j)}/preview.png" alt="">`:'<div class="ph">no picture</div>';
+const pic=(j,name)=>j?`<img loading="lazy" src="/api/job/${encodeURIComponent(j)}/preview.png" alt="" onclick="zoom(this.src,'${encodeURIComponent(name||'')}')">`:'<div class="ph">no picture</div>';
+function zoom(src,name){if(!src)return;$('lb-img').src=src;$('lb-t').textContent=decodeURIComponent(name||'');$('lb').showModal()}
 const mins=m=>{m=Math.round(+m);return m>=60?Math.floor(m/60)+' h '+(m%60)+' min':m+' min'};
 let LOADED={material:'',source:''};
 async function loadFil(){try{LOADED=await (await fetch('/api/filament',{cache:'no-store'})).json()}catch(e){}
@@ -284,7 +298,7 @@ async function qNext(s){if(!confirm(fwarn(s)+'Start this print now? The bed must
 async function hAdd(j,s){if(fwrong(s)&&!confirm(fwarn(s)+'Add it to the queue anyway?'))return;await post('/api/queue/add','m-ph',{job:decodeURIComponent(j)});phLoad()}
 async function pqLoad(){let q;try{q=await (await fetch('/api/queue',{cache:'no-store'})).json()}catch(e){return}
   $('pq-fil').innerHTML=await loadFil();
-  $('pq-list').innerHTML=q.map((e,i)=>`<div class="pc${i?'':' head'}${e.missing?' miss':''}">${pic(e.job)}<div>
+  $('pq-list').innerHTML=q.map((e,i)=>`<div class="pc${i?'':' head'}${e.missing?' miss':''}">${pic(e.job,e.name)}<div>
     <div class="t">${e.n}. ${esc(e.name)}</div>
     <div class="m">${[+e.est_min>0&&mins(e.est_min),+e.grams>0&&(+e.grams).toFixed(1)+' g',e.filament,e.missing&&'G-code is gone: remove it',(e.pause_at||[]).length&&'pauses before layer '+e.pause_at.join(', '),esc(e.note)].filter(Boolean).join(' · ')}</div>${fbadge(e.sliced)}
     <div class="btns"><button class="act" ${i?'':'disabled'} onclick="qMove(${e.n},${e.n-1},'${encodeURIComponent(e.name)}')">&uarr;</button><button class="act" ${i<q.length-1?'':'disabled'} onclick="qMove(${e.n},${e.n+1},'${encodeURIComponent(e.name)}')">&darr;</button>
@@ -294,7 +308,7 @@ async function qMove(n,to,name){await post('/api/queue/move','m-pq',{n:n,to:to,n
 async function qRemove(n,name){if(!confirm('Remove #'+n+' from the queue?'))return;await post('/api/queue/remove','m-pq',{n:n,name:decodeURIComponent(name)});pqLoad()}
 async function phLoad(){let h;try{h=await (await fetch('/api/history/cards',{cache:'no-store'})).json()}catch(e){return}
   await loadFil();
-  $('ph-list').innerHTML=h.map(r=>`<div class="pc">${pic(r.job)}<div><div class="t">${esc(r.name)}</div>
+  $('ph-list').innerHTML=h.map(r=>`<div class="pc">${pic(r.job,r.name)}<div><div class="t">${esc(r.name)}</div>
     <div style="margin-top:4px"><span class="badge ${esc(r.status)}" style="margin:0">${esc(r.status)}</span> <span class="stars">${'&#9733;'.repeat(+r.rating||0)}</span></div>
     <div class="m">${[esc(r.date).slice(0,16),+r.actual_min>0&&mins(r.actual_min),(+r.grams_used||+r.grams)>0&&(+r.grams_used||+r.grams).toFixed(1)+' g',esc(r.filament)].filter(Boolean).join(' · ')}</div>${fbadge(r.sliced)}${r.jid?`<div class="btns"><button class="act" onclick="hAdd('${encodeURIComponent(r.jid)}','${esc(r.sliced)}')">Add to queue</button><button class="act" onclick="openReslice('job','${encodeURIComponent(r.jid)}')">Reslice</button></div>`:''}</div></div>`).join('')||'No prints yet.'}
 // ---- models library ----
@@ -302,10 +316,13 @@ const TASK={};
 async function pmLoad(){let m;try{m=await (await fetch('/api/models',{cache:'no-store'})).json()}catch(e){return}
   $('pm-fil').innerHTML=await loadFil();
   $('pm-list').innerHTML=m.map(e=>{const t=TASK[e.id]||{};const id=encodeURIComponent(e.id);
-    return `<div class="pc">${e.picture?`<img loading="lazy" src="/api/model.png?id=${id}" alt="">`:'<div class="ph">no picture</div>'}<div>
-    <div class="t">${esc(e.name)}</div><div class="m">${esc(e.folder||'models')}</div>
+    return `<div class="pc">${e.picture?`<img loading="lazy" src="/api/model.png?id=${id}" alt="" onclick="zoom(this.src,'${encodeURIComponent(e.name)}')">`:'<div class="ph">no picture</div>'}<div>
+    <div class="t">${esc(e.name)}</div><div class="m">${[esc(e.date||''),esc(e.folder||'models')].filter(Boolean).join(' · ')}</div>
     <div class="m" id="t-${id}">${esc(t.msg||'')}</div>
-    <div class="btns"><button class="act go" ${t.state==='running'||!LOADED.material?'disabled':''} onclick="mSlice('${id}')">Slice &amp; add to queue</button><button class="act" onclick="openReslice('model','${id}')">Reslice...</button></div></div></div>`}).join('')||'No models found.'}
+    <div class="btns"><button class="act go" ${t.state==='running'||!LOADED.material?'disabled':''} onclick="mSlice('${id}')">Slice &amp; add to queue</button><button class="act" onclick="openReslice('model','${id}')">Reslice...</button><button class="act del" onclick="mDelete('${id}')">Delete</button></div></div></div>`}).join('')||'No models found.'}
+async function mDelete(id){const mid=decodeURIComponent(id),n=mid.split('/').pop().replace(/\.stl$/i,'');
+  if(!confirm('Delete the model "'+n+'"?\n\nIt disappears from this list (moved to models/.trash, so it can still be recovered).'))return;
+  await post('/api/models/delete','m-pm',{id:mid});pmLoad()}
 async function mSlice(id){const mid=decodeURIComponent(id),m=$('m-pm');
   try{const r=await fetch('/api/models/slice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:mid})});const j=await r.json();
     if(!j.task){m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.error||'failed');return}
