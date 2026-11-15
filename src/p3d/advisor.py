@@ -28,6 +28,9 @@ MESH_DEV_MM = 0.3
 LONG_MIN = 240
 FINE_LAYER_MAX = 0.2        # layer height <= this counts as standard/fine
 SPARSE_SHARE = 0.60         # sparse infill + inner walls share of filament
+# Rule 7: tall part on several small first-layer islands (Gridfinity feet: gf_bathroom, gf_paste_tulip came loose)
+ISLAND_SMALL_MM2 = 2000.0
+ISLAND_TALL_MM = 25.0
 
 
 def _num(v, default=None):
@@ -116,7 +119,49 @@ def advise(info):
     sparse = shares.get("Sparse infill", 0) + shares.get("Inner wall", 0)
     if mins and mins > LONG_MIN and lh and lh <= FINE_LAYER_MAX and sparse > SPARSE_SHARE:
         out.append(f"long print ({mins / 60:.1f} h), mostly hidden infill/inner walls -> draft quality saves time if it is not cosmetic")
+    # 7 tall part standing on separate small feet
+    isl = info.get("islands") or []
+    if len(isl) >= 2 and z and z > ISLAND_TALL_MM and min(isl) < ISLAND_SMALL_MM2:
+        out.append(f"first layer is {len(isl)} separate islands (smallest {min(isl):.0f} mm2) under a {z:.0f} mm tall part "
+                   "-> merge the feet into one base pad in the model (hull), and --brim")
     return out
+
+
+def first_layer_islands(lines, cell=1.0):
+    """Areas (mm2, rough) of the separate first-layer islands, brim/skirt excluded. Rasterized on a `cell` grid."""
+    layer, feat, pts, x, y = 0, None, set(), None, None
+    for line in lines:
+        if line.startswith(";LAYER_CHANGE"):
+            layer += 1
+            if layer > 1:
+                break
+        elif line.startswith(";TYPE:"):
+            feat = line[6:].strip()
+        elif line.startswith(("G1", "G0")):
+            m, n = re.search(r"X(-?[\d.]+)", line), re.search(r"Y(-?[\d.]+)", line)
+            nx, ny = (float(m.group(1)) if m else x), (float(n.group(1)) if n else y)
+            if layer == 1 and " E" in line and feat not in ("Brim", "Skirt", "Custom") and None not in (x, y, nx, ny):
+                k = int(max(abs(nx - x), abs(ny - y)) / cell) + 1
+                for i in range(k + 1):
+                    pts.add((round((x + (nx - x) * i / k) / cell), round((y + (ny - y) * i / k) / cell)))
+            x, y = nx, ny
+    seen, out = set(), []
+    for p in pts:
+        if p in seen:
+            continue
+        stack, size = [p], 0
+        seen.add(p)
+        while stack:
+            q = stack.pop()
+            size += 1
+            for dx in (-1, 0, 1):
+                for dy in (-1, 0, 1):
+                    r = (q[0] + dx, q[1] + dy)
+                    if r in pts and r not in seen:
+                        seen.add(r)
+                        stack.append(r)
+        out.append(size * cell * cell)
+    return sorted(out, reverse=True)
 
 
 def _read_json(p):
@@ -187,6 +232,7 @@ def gather(path):
         info["bed"] = (float(m.group(1)), float(m.group(2)))
     cmds, layer_at, _, _ = gcode.parse(lines)
     info["footprint"] = gcode.footprint(cmds, upto=1, layer_at=layer_at)
+    info["islands"] = first_layer_islands(lines)
     info["mesh"] = _latest_mesh()
     info["spool_material"] = _spool_material()
     return info

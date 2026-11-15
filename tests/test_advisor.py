@@ -86,3 +86,10 @@ def test_report_never_raises(tmp_path):
 def test_dashboard_advice_note_never_raises(tmp_path):
     from p3d.web import server
     assert server.advice_note(str(tmp_path / "missing.gcode")) == ""
+
+
+def test_small_feet_islands_flagged():
+    from p3d.advisor import advise
+    base = {"max_z": "48", "brim_type": "outer_only", "brim_width": "5"}
+    assert any("islands" in a for a in advise({**base, "islands": [1365, 1365]}))
+    assert not any("islands" in a for a in advise({**base, "islands": [2919]}))
