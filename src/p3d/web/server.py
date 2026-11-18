@@ -399,7 +399,7 @@ def slice_start(b, run=None):
             raise runner.Refuse("no slicer profile for filament " + fil)
     else:
         fil = loaded_filament()["material"].lower()
-        if fil not in ("pla", "petg"):
+        if fil not in ("pla", "petg", "tpu"):
             raise runner.Refuse("loaded filament unknown (or not PLA/PETG): run p3d spool use")
     opts = {}
     quality = str(b.get("quality") or "standard")

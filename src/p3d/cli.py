@@ -566,15 +566,15 @@ def default_filament():
     try:
         from . import spools
         s = spools.active(spools.load())
-        if s and s.get("material") in ("pla", "petg"):
+        if s and s.get("material") in ("pla", "petg", "tpu"):
             return s["material"]
     except Exception:
         pass
     f = str(config.Config().raw.get("filament", "petg")).lower()
-    return f if f in ("pla", "petg") else "petg"
+    return f if f in ("pla", "petg", "tpu") else "petg"
 
 
-FIL = A("-f", "--filament", default=default_filament(), choices=["pla", "petg"],
+FIL = A("-f", "--filament", default=default_filament(), choices=["pla", "petg", "tpu"],
         help="default: active spool material, else config 'filament', else petg")
 
 COMMANDS = {

@@ -51,7 +51,7 @@ def checks():
     prof = c.profiles
     bad = []
     for f in ["machine.json"] + [f"process-{q}.json" for q in ("draft", "standard", "fine")] + \
-             [f"filament-{f}.json" for f in ("pla", "petg")]:
+             [f"filament-{f}.json" for f in ("pla", "petg", "tpu")]:
         try:
             json.loads((prof / f).read_text())
         except Exception:

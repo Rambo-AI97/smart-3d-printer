@@ -20,6 +20,7 @@ PROCESSES = {
 FILAMENTS = {
     "pla": "Creality Generic PLA @Ender-3V3-all",
     "petg": "Creality Generic PETG @Ender-3V3-all",
+    "tpu": "Creality Generic TPU @Ender-3V3-all",
 }
 
 PLATES = ("cool", "eng", "hot", "textured", "supertack")  # Orca's bed-plate variants: set all so the plate type never matters
@@ -35,7 +36,7 @@ def bed_step_down(first, rest):
 
 
 # Bed step-down per material: (first layer, other layers). 2026-11-09: PETG sticks at 70 but 60 holds it and warps/ stresses less.
-BED = {"petg": (70, 60), "pla": (60, 55)}
+BED = {"petg": (70, 60), "pla": (60, 55), "tpu": (55, 50)}  # TPU 95A box: bed 50-60
 
 # Our calibration results, applied on top of the system presets (date: test that set it).
 CALIBRATED = {
@@ -50,6 +51,16 @@ CALIBRATED = {
         **bed_step_down(*BED["petg"]),
     },
     "pla": bed_step_down(*BED["pla"]),
+    # 2026-11-18 first TPU 95A roll (black, box 210-230 C). Direct drive but soft: slow, short retract, no wipe/z-hop drag.
+    "tpu": {
+        "nozzle_temperature_initial_layer": ["225"],
+        "nozzle_temperature": ["220"],
+        "filament_max_volumetric_speed": ["3"],       # ~30 mm/s at 0.2 x 0.45: soft filament buckles in the extruder if pushed
+        "filament_retraction_length": ["0.8"],        # long retracts tangle TPU in the gears
+        "filament_retraction_speed": ["25"],
+        "filament_z_hop": ["0"],
+        **bed_step_down(*BED["tpu"]),
+    },
 }
 
 # Applied to every process (draft/standard/fine). Date: print that set it.
