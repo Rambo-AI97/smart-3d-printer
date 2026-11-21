@@ -318,9 +318,8 @@ def reslice_defaults(b):
         if not src:
             out["note"] = "The source model of this job was not recorded (older slice), so it cannot be resliced. New slices record it."
         jd = d.parent
-        fil = gcode_filament(d).lower()
-        if fil in out["filaments"]:
-            st["filament"] = fil
+        fil = gcode_filament(d).lower()  # the job's old filament only fills in when the loaded one is unknown
+        job_fil = fil if fil in out["filaments"] else ""
         try:
             meta = json.loads((jd / "job.json").read_text()).get("settings")
         except Exception:
@@ -329,13 +328,20 @@ def reslice_defaults(b):
             proc = json.loads((jd / "process.json").read_text())
         except Exception:
             proc = {}
+        if meta and meta.get("filament") in out["filaments"]:
+            job_fil = meta["filament"]
+        if not st["filament"]:
+            st["filament"] = job_fil
+        elif job_fil and job_fil != st["filament"]:
+            out["note"] = (out["note"] + " " if out["note"] else "") + \
+                f"Was sliced for {job_fil.upper()}; defaulting to the loaded {st['filament'].upper()}."
         if meta:  # recorded by p3d slice: exact
             out["recorded"] = True
             st.update({k: meta[k] for k in ("quality", "supports", "brim", "keep_orient") if k in meta and meta[k] is not None})
             st["walls"] = meta.get("walls") or ""
             st["infill"] = meta.get("infill") or ""
             if meta.get("filament") in out["filaments"]:
-                st["filament"] = meta["filament"]
+                job_fil = meta["filament"]
         elif proc:  # older job: read the process snapshot
             for q in QUALITIES:
                 ref = _process(q)
