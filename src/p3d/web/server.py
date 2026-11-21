@@ -579,7 +579,37 @@ def controls():
     if config.print_running():
         why["show"] = "the printer port is busy (print or cooldown running)"
     return {"status": st, "why": why, "retry_name": (last or {}).get("name", ""),
-            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl}
+            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl,
+            "spools": spool_list()}
+
+
+def spool_list():
+    """Spools for the 'Loaded filament' picker: the active one decides the material for slicing and queue checks."""
+    d = spools.load()
+    return {"active": d["active"], "materials": filament_choices(),
+            "list": [{"name": s["name"], "material": s["material"], "color": s.get("color", ""),
+                      "left_g": round(float(s.get("left_g") or 0))} for s in d["spools"]]}
+
+
+def spool_edit(b):
+    """use: make a spool active (= loaded filament). add: register a new roll (and make it active)."""
+    d = spools.load()
+    name = str(b.get("name") or "").strip()
+    try:
+        if b.get("action") == "add":
+            mat = str(b.get("material") or "").lower()
+            if mat not in filament_choices():
+                raise runner.Refuse("material must be one of " + ", ".join(filament_choices()))
+            if not name or len(name) > 40:
+                raise runner.Refuse("spool name required (max 40 chars)")
+            spools.add(d, name, mat, float(b.get("grams") or 1000), str(b.get("color") or "")[:20])
+        elif b.get("action") != "use":
+            raise runner.Refuse("action: use | add")
+        s = spools.use(d, name)
+    except ValueError as e:
+        raise runner.Refuse(str(e))
+    spools.save(d)
+    return f"loaded: {s['name']} ({s['material'].upper()}, {round(float(s['left_g']))} g left)"
 
 
 # ---- knowledge tab: a fixed allowlist of hub markdown files (never a path from the client) ----
@@ -781,7 +811,7 @@ class H(BaseHTTPRequestHandler):
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
                         "/api/queue/move",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
-                        "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
+                        "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save", "/api/spool"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -826,6 +856,11 @@ class H(BaseHTTPRequestHandler):
                     if level_running():
                         raise runner.Refuse("a bed check is running")
                     return self.reply({"ok": runner.queue_next(notify=True)})
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            if path == "/api/spool":
+                try:
+                    return self.reply({"ok": spool_edit(self.body())})
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
             if path == "/api/queue/add":

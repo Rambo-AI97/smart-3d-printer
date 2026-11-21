@@ -50,7 +50,7 @@ input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl
 button.act.go{background:var(--okbg);color:var(--ok);border-color:var(--ok)}.fw{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--warnbg);color:var(--warn);margin-top:4px}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
 #ctl{position:sticky;top:0;z-index:5}#ctl .row{gap:0}button.act.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
-#ctl button.act{margin:4px 6px 0 0;padding:7px 12px}#lvl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}#lvl canvas{width:260px;height:190px;margin:0}
+#ctl button.act{margin:4px 6px 0 0;padding:7px 12px}#ctl .spl{margin:4px 0 0 4px;display:flex;gap:6px;align-items:center;font-size:13px}#ctl select{padding:6px 8px;max-width:100%}#lvl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}#lvl canvas{width:260px;height:190px;margin:0}
 dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:560px;width:calc(100% - 24px)}dialog::backdrop{background:#0009}
 .fm{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px 12px;margin-top:10px}.fm label{font-size:12px;color:var(--mute);display:grid;gap:3px}.fm label.ck{display:flex;gap:6px;align-items:center;color:var(--fg);font-size:14px}
 input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px;width:100%}
@@ -75,7 +75,8 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <button class="act" id="c-retry" onclick="if(confirm('Reprint '+(CT.retry_name||'the last job')+'? The bed must be clear.'))ctl('/api/retry')">Retry last print</button>
 <button class="act" id="c-level" onclick="if(confirm('Check the bed? The printer homes, heats the bed to 70 C and probes (about 5 minutes). The bed must be empty.'))ctl('/api/level')">Check bed level</button>
 <button class="act" id="c-show" onclick="ctl('/api/level/show')">Last bed mesh</button>
-<button class="act" id="c-cool" onclick="ctl('/api/cooldown')">Cooldown</button></div>
+<button class="act" id="c-cool" onclick="ctl('/api/cooldown')">Cooldown</button>
+<label class="spl" title="The loaded spool decides the filament used for slicing and the queue spool check">Loaded filament <select id="c-spool" onchange="spoolPick(this)"></select></label></div>
 <div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></section>
 <div id="live">
 <section class="card hero">
@@ -374,11 +375,25 @@ async function ctl(url){const m=$('m-bar');m.textContent='...';
     tick();queueLoad();ctlLoad()}catch(e){m.textContent='failed: '+e}}
 async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-store'})).json();
   for(const[k,id]of[['pause','c-pause'],['resume','c-resume'],['stop','c-stop'],['next','c-next'],['retry','c-retry'],['level','c-level'],['show','c-show'],['cooldown','c-cool']]){const b=$(id);b.disabled=!CT[k];b.title=CT[k]?'':(CT.why[k]||'')}
+  spoolFill(CT.spools);
   const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
   $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');
   if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now')}
   else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when)}
   }catch(e){}}
+let SPK='';
+function spoolFill(S){if(!S)return;const sel=$('c-spool'),k=JSON.stringify(S);if(k===SPK||document.activeElement===sel)return;SPK=k;
+  sel.innerHTML=S.list.map(s=>`<option value="${escH(s.name).replace(/"/g,'&quot;')}"${s.name===S.active?' selected':''}>${escH(s.name)} · ${s.material.toUpperCase()} · ${s.left_g} g</option>`).join('')
+    +(S.active?'':'<option value="" selected>(none)</option>')+'<option value="+">+ New spool…</option>';sel.dataset.mats=S.materials.join(',')}
+async function spoolPick(sel){const v=sel.value,m=$('m-bar');let body={action:'use',name:v};
+  if(v==='+'){const mats=sel.dataset.mats||'pla,petg,tpu',name=prompt('New spool name (e.g. White TPU 1kg)');if(!name){SPK='';return ctlLoad()}
+    const mat=(prompt('Material: '+mats,'')||'').trim().toLowerCase();if(!mat){SPK='';return ctlLoad()}
+    const g=prompt('Grams on the roll',1000);if(!g){SPK='';return ctlLoad()}
+    body={action:'add',name:name.trim(),material:mat,grams:+g,color:(name.match(/white|black|grey|gray|red|blue|green|clear|orange|yellow/i)||[''])[0].toLowerCase()}}
+  else if(!confirm('Switch loaded filament to '+v+'? Only do this after the roll is on the printer.')){SPK='';return ctlLoad()}
+  m.textContent='...';try{const r=await fetch('/api/spool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),j=await r.json();
+    m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done')}catch(e){m.textContent='failed: '+e}
+  SPK='';ctlLoad();tick()}
 function lvlDraw(grid,span,verdict,when){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');theme();
   const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
   const n=grid[0].length,cw=w/n,ch=h/grid.length;x.font='11px system-ui';x.textAlign='center';
