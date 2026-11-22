@@ -207,6 +207,8 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
         proc["enable_support"] = "1"
     if brim:
         proc["brim_type"] = "outer_only"
+        if not isinstance(brim, bool):  # --brim 8 = brim width in mm (default profile: 5)
+            proc["brim_width"] = str(brim)
     if walls:  # strong parts: more perimeters matter more than infill
         proc["wall_loops"] = str(walls)
         proc["top_shell_layers"] = proc["bottom_shell_layers"] = str(max(5, walls))
@@ -239,7 +241,8 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
         elif line.startswith("M190 S"):
             info.setdefault("bed_temperature", line.split()[1][1:])
     (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final), "settings": {
-        "quality": quality, "filament": filament, "supports": bool(supports), "brim": bool(brim), "walls": walls,
+        "quality": quality, "filament": filament, "supports": bool(supports),
+        "brim": brim if brim and not isinstance(brim, bool) else bool(brim), "walls": walls,
         "infill": infill, "keep_orient": bool(keep_orient)}}))
     try:
         from . import preview
@@ -612,7 +615,7 @@ COMMANDS = {
     ],
     "Design": [
         ("slice", cmd_slice, "STL/3MF -> G-code with the bundled Orca profiles",
-         [A("model"), QUAL, FIL, A("--supports", action="store_true"), A("--brim", action="store_true"),
+         [A("model"), QUAL, FIL, A("--supports", action="store_true"), A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
           A("--walls", type=int, help="perimeters (strong parts: 5-6)"),
           A("--infill", type=int, help="percent, gyroid"),
           A("--keep-orient", action="store_true", help="don't auto-rotate (part already laid out for strength)")]),
@@ -621,7 +624,7 @@ COMMANDS = {
           A("--view", action="append", help="extra -D only for the preview, e.g. 'part=\"assembly\"'")]),
         ("make", cmd_make, "scad NAME -> STL -> slice (kept orientation) -> warnings + small shot JPG",
          [A("name"), A("-D", action="append", help="param=value (repeat)"), QUAL, FIL,
-          A("--supports", action="store_true"), A("--brim", action="store_true"),
+          A("--supports", action="store_true"), A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
           A("--walls", type=int), A("--infill", type=int),
           A("--orient", action="store_true", help="let the slicer auto-rotate")]),
         ("shot", cmd_shot, "small labelled JPG of job previews (to send to a phone)",
