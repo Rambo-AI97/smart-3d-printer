@@ -331,3 +331,12 @@ def test_models_newest_first_and_delete_to_trash(hub, tmp_path, monkeypatch):
     assert call(h, "/api/models/delete", {"id": "../etc/passwd"})[0] == 409
     assert call(serve(monkeypatch, remote=True), "/api/models/delete", {"id": "old.stl"})[0] == 403
     assert old.exists()
+
+
+def test_bed_turns_from_back_first_grid():
+    from p3d.web import server
+    g = [[-0.479, -0.393, -0.209, -0.362], [-0.286, -0.262, 0.026, -0.179],
+         [-0.460, -0.109, -0.003, -0.138], [-0.388, -0.167, 0.125, -0.079]]  # back row first
+    t = {x["corner"]: x["action"] for x in server.bed_turns(g)}
+    assert t == {"BACK-LEFT": "1/4 turn COUNTER-CLOCKWISE", "BACK-RIGHT": "leave it",
+                 "FRONT-LEFT": "1/8 turn COUNTER-CLOCKWISE", "FRONT-RIGHT": "3/8 turn CLOCKWISE"}

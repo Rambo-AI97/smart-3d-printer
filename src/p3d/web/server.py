@@ -526,7 +526,7 @@ def level_start(show=False, bed=70, run=None):
                 tail = [x for x in ANSI.sub("", out).strip().splitlines() if x.strip()]
                 _task_end(tid, state="error", msg=tail[-1] if tail else "bed check failed")
             else:
-                _task_end(tid, state="done", grid=grid, span=span, verdict=verdict,
+                _task_end(tid, state="done", grid=grid, span=span, verdict=verdict, turns=bed_turns(grid),
                           msg=f"span {span:.2f} mm: {verdict}" if span is not None else "done")
         except Exception as e:
             _task_end(tid, state="error", msg=str(e))
@@ -535,12 +535,21 @@ def level_start(show=False, bed=70, run=None):
     return tid
 
 
+def bed_turns(grid):
+    """Screw turns for a grid stored back row first (dashboard order)."""
+    from .. import level as _lv
+    try:
+        return [{"corner": n, "action": a, "mm": round(d, 2)} for n, a, d in _lv.turns(grid[::-1])]
+    except (IndexError, TypeError):
+        return []
+
+
 def level_last():
     """Newest finished bed result: from the task list, else the last row of bed_mesh_log.csv (rows are stored front to back)."""
     done = [t for t in _TASKS.values() if t.get("kind") == "level" and t.get("state") == "done"]
     if done:
         t = max(done, key=lambda t: t["id"])
-        return {"grid": t["grid"], "span": t["span"], "verdict": t["verdict"], "when": "this session"}
+        return {"grid": t["grid"], "span": t["span"], "verdict": t["verdict"], "when": "this session", "turns": bed_turns(t["grid"])}
     rows = read_csv("bed_mesh_log.csv")
     for r in reversed(rows):
         try:
@@ -549,7 +558,8 @@ def level_last():
         except (ValueError, KeyError):
             continue
         return {"grid": grid, "span": span,
-                "verdict": "GOOD" if span <= 0.30 else "OK" if span <= 0.60 else "NEEDS WORK", "when": r.get("date", "")}
+                "verdict": "GOOD" if span <= 0.30 else "OK" if span <= 0.60 else "NEEDS WORK", "when": r.get("date", ""),
+                "turns": bed_turns(grid)}
     return None
 
 

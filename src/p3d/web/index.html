@@ -380,8 +380,8 @@ async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-st
   spoolFill(CT.spools);
   const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
   $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');
-  if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now')}
-  else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when)}
+  if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now',lv.turns)}
+  else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when,l.turns)}
   }catch(e){}}
 let SPK='';
 function spoolFill(S){if(!S)return;const sel=$('c-spool'),k=JSON.stringify(S);if(k===SPK||document.activeElement===sel)return;SPK=k;
@@ -396,12 +396,13 @@ async function spoolPick(sel){const v=sel.value,m=$('m-bar');let body={action:'u
   m.textContent='...';try{const r=await fetch('/api/spool',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}),j=await r.json();
     m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done')}catch(e){m.textContent='failed: '+e}
   SPK='';ctlLoad();tick()}
-function lvlDraw(grid,span,verdict,when){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');theme();
+function lvlDraw(grid,span,verdict,when,turns){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');theme();
   const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
   const n=grid[0].length,cw=w/n,ch=h/grid.length;x.font='11px system-ui';x.textAlign='center';
   grid.forEach((row,i)=>row.forEach((v,j)=>{const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?'#3ecf8e':v>0?`rgba(239,83,80,${.35+.65*a})`:`rgba(78,161,255,${.35+.65*a})`;
     x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#000';x.fillText((v>0?'+':'')+v.toFixed(2),j*cw+cw/2,i*ch+ch/2+4)}));
-  $('lvl-txt').innerHTML='Bed mesh ('+esc(when||'')+'): span <b>'+(span==null?D:span.toFixed(2))+' mm</b> '+esc(verdict||'')+'<br>Seen from the front: back row on top. Red = bed high, blue = low, green = flat. Good under 0.30 mm, usable under 0.60.'}
+  $('lvl-txt').innerHTML='Bed mesh ('+esc(when||'')+'): span <b>'+(span==null?D:span.toFixed(2))+' mm</b> '+esc(verdict||'')+'<br>Seen from the front: back row on top. Red = bed high, blue = low, green = flat. Good under 0.30 mm, usable under 0.60.'
+    +(turns&&turns.length?'<br><b>What to turn</b> (Allen key from the top, clockwise = bed corner down):<br>'+turns.map(t=>esc(t.corner)+': <b>'+esc(t.action)+'</b>'+(t.action==='leave it'?'':' ('+(t.mm>0?'too high':'too low')+' by '+Math.abs(t.mm).toFixed(2)+' mm)')).join('<br>')+'<br>Then press Check bed level again.':'')}
 // ---- reslice form ----
 let RS=null,rsTimer=0;
 async function openReslice(kind,idEnc){const id=decodeURIComponent(idEnc);RS={kind,id,job:''};$('rs-out').innerHTML='';$('rs-msg').textContent='';

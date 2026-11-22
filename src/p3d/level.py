@@ -66,24 +66,32 @@ def report(grid):
     return span
 
 
-def corners(grid):
-    """Exactly what to do with the Allen key at each of the 4 bed screws."""
+def turns(grid):
+    """[(corner, action, delta_mm)] for the 4 bed screws; grid rows front to back. action e.g. '3/8 turn CLOCKWISE'."""
+    from fractions import Fraction
     c = [("BACK-LEFT", grid[-1][0]), ("BACK-RIGHT", grid[-1][-1]), ("FRONT-LEFT", grid[0][0]), ("FRONT-RIGHT", grid[0][-1])]
     ref = sum(v for _, v in c) / 4
-    from fractions import Fraction
-    print("\n  WHAT TO TURN (Allen key from the top; clockwise = down):")
+    out = []
     for name, v in c:
         d = v - ref                                   # + = corner too high -> clockwise (down)
         eighths = round(abs(d) / QUARTER * 2)         # 1/8-turn steps
         if eighths == 0:
-            print(f"    {name:<12} leave it")
+            out.append((name, "leave it", d))
             continue
-        t = Fraction(eighths, 8)
-        whole, part = divmod(t, 1)
+        whole, part = divmod(Fraction(eighths, 8), 1)
         amount = " ".join(x for x in (str(whole) if whole else "", str(part) if part else "") if x)
-        way = "CLOCKWISE" if d > 0 else "COUNTER-CLOCKWISE"
-        print(f"    {name:<12} {amount} turn {way:<17} ({'too high' if d > 0 else 'too low'} by {abs(d):.2f} mm)")
+        out.append((name, f"{amount} turn {'CLOCKWISE' if d > 0 else 'COUNTER-CLOCKWISE'}", d))
+    return out
 
+
+def corners(grid):
+    """Exactly what to do with the Allen key at each of the 4 bed screws."""
+    print("\n  WHAT TO TURN (Allen key from the top; clockwise = down):")
+    for name, action, d in turns(grid):
+        if action == "leave it":
+            print(f"    {name:<12} leave it")
+        else:
+            print(f"    {name:<12} {action:<27} ({'too high' if d > 0 else 'too low'} by {abs(d):.2f} mm)")
 
 
 def save(grid, span):
