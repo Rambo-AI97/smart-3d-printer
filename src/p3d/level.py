@@ -6,7 +6,7 @@ Usage: p3d level                   probe now, cold (printer moves!)
        p3d level --soak N          settle minutes after heating (default 2)
        p3d level --show            just show the mesh already saved in the printer
 """
-import csv, re, sys, time
+import csv, re, signal, sys, time
 
 from . import config
 GOOD, OK = 0.30, 0.60  # mm span: good / usable
@@ -27,6 +27,19 @@ def talk(ser, cmd, wait=300, live=None):
                 live(line)
             end = time.time() + wait  # still alive (busy/temps keep it going)
     raise RuntimeError(f"no 'ok' after {cmd}")
+
+
+class Stopped(Exception):
+    pass
+
+
+_last_temp = [0.0]
+def temp_line(line):
+    """Print the bed temperature while heating (at most every 2 s): '  bed 55.2 / 70 C'."""
+    m = re.search(r"B:\s*([\d.]+)\s*/\s*([\d.]+)", line)
+    if m and time.time() - _last_temp[0] >= 2:
+        _last_temp[0] = time.time()
+        print(f"  bed {float(m.group(1)):.1f} / {float(m.group(2)):.0f} C", flush=True)
 
 
 def parse_grid(lines):
@@ -107,23 +120,33 @@ def save(grid, span):
 
 
 def bed_temp(ser):
-    for l in talk(ser, "M105") + [""]:
-        m = re.search(r"B:\s*([\d.]+)", l)
-        if m:
-            return float(m.group(1))
+    """Current bed temperature. The 'ok' line itself carries the temps on Marlin, so read it too; retry (first reply after connect can be empty)."""
+    for _ in range(5):
+        ser.write(b"M105\n")
+        end = time.time() + 5
+        while time.time() < end:
+            l = ser.readline().decode(errors="replace")
+            m = re.search(r"B:\s*([\d.]+)", l)
+            if m:
+                t, stop = float(m.group(1)), time.time() + 2
+                while not l.startswith("ok") and time.time() < stop:   # eat the trailing 'ok' so the next command lines up
+                    l = ser.readline().decode(errors="replace")
+                return t
+        time.sleep(0.5)
     return 0.0
 
 
 def probe(ser):
-    print("Homing and probing (about 2 minutes)...", flush=True)
+    print("Homing...", flush=True)
     talk(ser, "G28")
+    print("Probing 16 points (about 2 minutes)...", flush=True)
     n = [0]
     def show(line):
-        m = re.search(r"Bed X:\s*([-\d.]+)\s*Y:\s*([-\d.]+)\s*Z:\s*([-\d.]+)", line)
+        m = re.search(r"X:\s*([-\d.]+)\s*Y:\s*([-\d.]+)\s*Z:\s*([-\d.]+)", line) if "Bed" in line or "Probe" in line else None
         if m:
             n[0] += 1
             print(f"  point {n[0]:>2}  X{float(m.group(1)):>5.0f} Y{float(m.group(2)):>5.0f}  Z {float(m.group(3)):+.3f}", flush=True)
-    talk(ser, "G29", wait=600, live=show)
+    talk(ser, "G29 V3", wait=600, live=show)   # V3: firmware reports every probed point (Bed X: Y: Z:)
     talk(ser, "M500")  # keep the new mesh after power-off
     grid = parse_grid(talk(ser, "M420 V"))
     present(ser)
@@ -147,6 +170,10 @@ def main(show_only=False, bed=0, soak_min=None, adjust=False):
                 sys.exit("No mesh found in the printer.")
             report(grid)
             return
+        def stop(*_):
+            ser.write(b"M108\n")   # emergency parser: break a heat-up wait now
+            raise Stopped()
+        signal.signal(signal.SIGTERM, stop)
         try:
             if bed:
                 now = bed_temp(ser)
@@ -158,11 +185,12 @@ def main(show_only=False, bed=0, soak_min=None, adjust=False):
                 else:
                     soak = 2 if soak_min is None else soak_min
                     print(f"Heating bed to {bed} C, then {soak} min settle (a hot bed changes shape)...", flush=True)
-                    talk(ser, f"M190 S{bed}", wait=900)
+                    talk(ser, f"M190 S{bed}", wait=900, live=temp_line)
                     end = time.time() + soak * 60
                     while time.time() < end:
-                        talk(ser, "M105")
-                        time.sleep(20)
+                        b = bed_temp(ser)
+                        print(f"  settle {int(end - time.time())}s left, bed {b:.1f} C", flush=True)
+                        time.sleep(10)
             while True:
                 grid = probe(ser)
                 if not grid:
@@ -179,9 +207,17 @@ def main(show_only=False, bed=0, soak_min=None, adjust=False):
                     break
                 if bed:
                     talk(ser, f"M140 S{bed}")  # keep it hot between checks
+        except Stopped:
+            ser.write(b"M140 S0\n")   # queued: runs right away, or after the probe pass the firmware is finishing
+            print("Stopped. Bed heater off (a probe pass already running finishes first, up to 2 min).", flush=True)
+            sys.exit(3)
         finally:
+            signal.signal(signal.SIGTERM, signal.SIG_DFL)
             if bed:
-                talk(ser, "M140 S0")
+                try:
+                    talk(ser, "M140 S0", wait=10)
+                except Exception:
+                    ser.write(b"M140 S0\n")
                 print("Bed heater off.")
 
 if __name__ == "__main__":

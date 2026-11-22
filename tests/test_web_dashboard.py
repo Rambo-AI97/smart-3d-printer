@@ -221,7 +221,7 @@ def test_retry_and_level_refuse_while_printing(hub, tmp_path, monkeypatch):
     started = []
     monkeypatch.setattr(runner, "start", lambda gc, **kw: started.append(gc) or "started")
     ran = []
-    monkeypatch.setattr(server, "run_level", lambda args: ran.append(args) or (0, ""))
+    monkeypatch.setattr(server, "run_level", lambda args, on_line=None: ran.append(args) or (0, ""))
     h = serve(monkeypatch)
     monkeypatch.setattr(config, "print_running", lambda: True)
     monkeypatch.setattr(config, "print_cancellable", lambda: True)
@@ -252,7 +252,7 @@ def test_level_task_runs_and_parses(hub, monkeypatch):
            "  front  \x1b[42;30m +0.00 \x1b[0m\x1b[42;30m +0.00 \x1b[0m\x1b[42;30m +0.00 \x1b[0m\n\n"
            "  Span: 0.75 mm  ->  NEEDS WORK   (good <= 0.3, usable <= 0.6)\n")
     seen = []
-    monkeypatch.setattr(server, "run_level", lambda args: seen.append(args) or (0, out))
+    monkeypatch.setattr(server, "run_level", lambda args, on_line=None: seen.append(args) or (0, out))
     monkeypatch.setattr(config, "print_running", lambda: False)
     monkeypatch.setattr(config, "print_cancellable", lambda: False)
     h = serve(monkeypatch)
@@ -282,7 +282,7 @@ def test_level_last_falls_back_to_log(hub):
 
 def test_level_error_and_busy(hub, monkeypatch):
     monkeypatch.setattr(config, "print_running", lambda: False)
-    monkeypatch.setattr(server, "run_level", lambda args: (1, "No mesh found in the printer.\n"))
+    monkeypatch.setattr(server, "run_level", lambda args, on_line=None: (1, "No mesh found in the printer.\n"))
     server._TASKS.clear()
     tid = server.level_start()
     for _ in range(50):
@@ -342,3 +342,19 @@ def test_bed_turns_from_back_first_grid():
     t = {x["corner"]: x["action"] for x in server.bed_turns(g)}
     assert t == {"BACK-LEFT": "1/4 turn COUNTER-CLOCKWISE", "BACK-RIGHT": "leave it",
                  "FRONT-LEFT": "1/8 turn COUNTER-CLOCKWISE", "FRONT-RIGHT": "3/8 turn CLOCKWISE"}
+
+
+def test_level_progress_lines():
+    from p3d.web import server
+    server._TASKS["t1"] = {"id": "t1", "kind": "level", "state": "running"}
+    for l in ["Heating bed to 70 C, then 2 min settle", "  bed 55.2 / 70 C", "Homing...", "Probing 16 points (about 2 minutes)...",
+              "  point  1  X   30 Y   25  Z -0.388", "  point  2  X  100 Y   25  Z +0.125"]:
+        server.level_progress("t1", l)
+    t = server._TASKS.pop("t1")
+    assert t["phase"] == "probing" and t["points"] == [[30, 25, -0.388], [100, 25, 0.125]] and t["bed"] == 55.2
+
+
+def test_level_stop_refuses_when_idle():
+    from p3d.web import server
+    with pytest.raises(runner.Refuse):
+        server.level_stop()

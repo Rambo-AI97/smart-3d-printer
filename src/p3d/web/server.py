@@ -499,10 +499,74 @@ def parse_level(text):
     return grid, span, verdict
 
 
-def run_level(args):
-    """Run `p3d level ARGS` as a child process; returns (exit code, output). Replaced in tests."""
-    r = subprocess.run([sys.executable, "-m", "p3d", "level", *args], capture_output=True, text=True, timeout=1500)
-    return r.returncode, (r.stdout or "") + (r.stderr or "")
+_LEVEL_PROC = [None]
+
+
+def run_level(args, on_line=None):
+    """Run `p3d level ARGS` as a child process, feeding each output line to on_line; returns (exit code, output)."""
+    pr = subprocess.Popen([sys.executable, "-u", "-m", "p3d", "level", *args], stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True)
+    _LEVEL_PROC[0] = pr
+    out = []
+    try:
+        for line in pr.stdout:
+            out.append(line)
+            if on_line:
+                try:
+                    on_line(ANSI.sub("", line).rstrip())
+                except Exception:
+                    pass
+        pr.wait(timeout=1500)
+    finally:
+        _LEVEL_PROC[0] = None
+        try:
+            (config.XDG_DATA / "p3d" / "level_last.log").write_text("".join(out))
+        except Exception:
+            pass
+    return pr.returncode, "".join(out)
+
+
+def level_progress(tid, line):
+    """Turn one `p3d level` output line into live task fields: phase, bed/target temp, probed points."""
+    t = _TASKS.get(tid)
+    if t is None:
+        return
+    m = re.match(r"\s*bed ([\d.]+) / ([\d.]+) C", line)
+    if m:
+        t.update(phase="heating", bed=float(m.group(1)), target=float(m.group(2)),
+                 msg=f"heating the bed: {float(m.group(1)):.0f} of {float(m.group(2)):.0f} C")
+        return
+    m = re.match(r"\s*settle (\d+)s left, bed ([\d.]+) C", line)
+    if m:
+        t.update(phase="settle", left_s=int(m.group(1)), bed=float(m.group(2)),
+                 msg=f"bed at temperature, letting it settle: {int(m.group(1)) // 60}:{int(m.group(1)) % 60:02d} left")
+        return
+    m = re.search(r"point\s+(\d+)\s+X\s*([-\d.]+)\s+Y\s*([-\d.]+)\s+Z\s*([-+\d.]+)", line)
+    if m:
+        pts = t.setdefault("points", [])
+        pts.append([float(m.group(2)), float(m.group(3)), float(m.group(4))])
+        t.update(phase="probing", msg=f"probing point {len(pts)} of 16")
+        return
+    if line.startswith("Homing"):
+        t.update(phase="homing", msg="homing (finding the corner and the nozzle height)")
+    elif line.startswith("Probing"):
+        t.update(phase="probing", points=[], msg="probing point 1 of 16")
+    elif line.startswith(("Bed already", "Bed still warm", "Heating bed")):
+        t.update(msg=line.strip())
+    elif line.startswith("Stopped"):
+        t.update(phase="stopped", msg=line.strip())
+
+
+def level_stop():
+    """Stop a running bed check: heater off, breaks the heat-up wait. A probe pass in progress finishes in the firmware."""
+    pr = _LEVEL_PROC[0]
+    if not level_running() or pr is None:
+        raise runner.Refuse("no bed check is running")
+    pr.terminate()
+    for t in _TASKS.values():
+        if t.get("kind") == "level" and t["state"] == "running":
+            t.update(msg="stopping: heater off...", phase="stopping")
+    return "stopping the bed check (heater off)"
 
 
 def level_start(show=False, bed=70, run=None):
@@ -522,9 +586,12 @@ def level_start(show=False, bed=70, run=None):
 
     def work():
         try:
-            code, out = (run or run_level)(["--show"] if show else ["--hot", str(bed)])
+            a = ["--show"] if show else ["--hot", str(bed)]
+            code, out = run(a) if run else run_level(a, lambda l: level_progress(tid, l))
             grid, span, verdict = parse_level(out)
-            if code or not grid:
+            if code == 3 or _TASKS[tid].get("phase") in ("stopping", "stopped"):
+                _task_end(tid, state="stopped", msg="bed check stopped, heater off")
+            elif code or not grid:
                 tail = [x for x in ANSI.sub("", out).strip().splitlines() if x.strip()]
                 _task_end(tid, state="error", msg=tail[-1] if tail else "bed check failed")
             else:
@@ -597,7 +664,7 @@ def controls():
     if config.print_running():
         why["show"] = "the printer port is busy (print or cooldown running)"
     return {"status": st, "why": why, "retry_name": (last or {}).get("name", ""),
-            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl,
+            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl, "lstop": lvl,
             "spools": spool_list()}
 
 
@@ -835,7 +902,7 @@ class H(BaseHTTPRequestHandler):
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
                         "/api/queue/move",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
-                        "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save", "/api/spool"):
+                        "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -862,7 +929,7 @@ class H(BaseHTTPRequestHandler):
                 return self.reply({"ok": pause.remove_pause_layers(layers)})
             if path == "/api/resume":
                 return self.reply({"ok": pause.request_resume()})
-            if path in ("/api/retry", "/api/cooldown", "/api/level", "/api/level/show", "/api/knowledge/save"):
+            if path in ("/api/retry", "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save"):
                 try:
                     if path == "/api/retry":
                         if level_running():
@@ -870,6 +937,8 @@ class H(BaseHTTPRequestHandler):
                         return self.reply({"ok": runner.retry_last(notify=True)})
                     if path == "/api/cooldown":
                         return self.reply({"ok": cooldown_start()})
+                    if path == "/api/level/stop":
+                        return self.reply({"ok": level_stop()})
                     if path == "/api/knowledge/save":
                         return self.reply({"ok": knowledge_save(self.body())})
                     return self.reply({"ok": "started", "task": level_start(show=path.endswith("show"))}, 202)
