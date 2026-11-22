@@ -84,6 +84,7 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
   <div>
     <span class="badge" id="badge">idle</span>
     <div class="name" id="name">No active job</div>
+    <div class="msg" id="jobid"></div>
     <div class="prog">
       <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" style="color:var(--line)" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#4ea1ff" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
       <div class="stats">
@@ -168,7 +169,8 @@ function parseTemps(s){const r={},t=(s||'').match(/T:\s*([\d.]+)\s*\/\s*([\d.]+)
 function parseStarted(s){if(!s)return null;const d=new Date(s.replace(' ','T'));return isNaN(d)?new Date(s):d}
 function render(s){
   const st=s.stale?'stale (sender stopped)':(s.status||'idle');$('badge').textContent=st;$('badge').className='badge '+st;
-  $('name').textContent=s.file||'No active job';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
+  $('name').textContent=s.file||'No active job';
+  $('jobid').textContent=s.job_id?('job '+s.job_id+(s.job_note?' · '+s.job_note:'')+(s.spool?' · '+s.spool:'')):'';document.title=(st==='printing'?Math.round(s.progress||0)+'% · ':'')+'Printer';
   const pct=num(s.progress);$('pct').textContent=pct===null?D:Math.round(pct)+'%';
   $('arc').setAttribute('stroke-dashoffset',326.7*(1-(pct||0)/100));
   theme();$('arc').setAttribute('stroke',st==='done'?COL.done:st==='failed'?COL.failed:st==='cancelled'?COL.cancelled:COL.acc);

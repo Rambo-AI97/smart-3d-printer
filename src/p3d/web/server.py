@@ -730,6 +730,12 @@ class H(BaseHTTPRequestHandler):
             s["server_time"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             s["server_ts"] = time.time()
             s["loaded_filament"] = loaded_filament()
+            s["job_note"] = ""
+            if s.get("job_dir"):  # queue note saved with the job (shows WHICH version is printing)
+                try:
+                    s["job_note"] = str(json.loads((pathlib.Path(s["job_dir"]) / "job.json").read_text()).get("note") or "")
+                except Exception:
+                    pass
             self.send(json.dumps(s).encode(), "application/json")
         elif path == "/api/preview.png":
             d = job_dir(read_state())

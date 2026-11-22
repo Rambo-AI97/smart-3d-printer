@@ -118,6 +118,13 @@ def q_add(q, gcode, note="", pause_at=()):
     e = {"gcode": str(g), "name": g.parent.name, "note": note, "added": time.strftime("%Y-%m-%d %H:%M")}
     if pause_at:
         e["pause_at"] = sorted({int(x) for x in pause_at})
+    if note:  # keep the note with the job so the Live tab can show it while it prints
+        meta = job_meta(g)
+        meta["note"] = note
+        try:
+            (g.parent / "job.json").write_text(json.dumps(meta))
+        except OSError:
+            pass
     q.append(e)
     return q
 
