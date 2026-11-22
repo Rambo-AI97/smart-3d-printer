@@ -152,6 +152,9 @@ def main(show_only=False, bed=0, soak_min=None, adjust=False):
                 now = bed_temp(ser)
                 if now >= bed - 3 and soak_min is None:
                     print(f"Bed already at {now:.0f} C: probing now, no settle wait.", flush=True)
+                elif now >= bed - 20 and soak_min is None:
+                    print(f"Bed still warm ({now:.0f} C) from the last print: topping up to {bed} C, no settle wait.", flush=True)
+                    talk(ser, f"M190 S{bed}", wait=900)
                 else:
                     soak = 2 if soak_min is None else soak_min
                     print(f"Heating bed to {bed} C, then {soak} min settle (a hot bed changes shape)...", flush=True)

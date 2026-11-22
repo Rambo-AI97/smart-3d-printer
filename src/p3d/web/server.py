@@ -481,8 +481,6 @@ def level_refusal():
     """Why a bed probe must not start now, or ''. The probe moves the printer and holds the serial port."""
     if config.print_cancellable():
         return "a print is running or heating"
-    if config.print_running():
-        return "the printer is cooling down after a print (the port is busy): wait until it is done"
     if level_running():
         return "a bed check is already running"
     return ""
@@ -515,6 +513,10 @@ def level_start(show=False, bed=70, run=None):
             raise runner.Refuse(why)
     elif config.print_running():
         raise runner.Refuse("the printer port is busy (print or cooldown running)")
+    if not show:
+        runner.end_cooldown_if_idle()   # bed still warm from the print: stop the cooldown and probe now
+        if config.print_running():
+            raise runner.Refuse("could not stop the cooldown (printer port busy)")
     tid = _new_task("level", model="bed mesh" if show else "bed check",
                     msg="reading the saved mesh..." if show else "heating, probing (about 5 minutes)...")
 

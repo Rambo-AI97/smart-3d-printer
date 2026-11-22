@@ -230,9 +230,11 @@ def test_retry_and_level_refuse_while_printing(hub, tmp_path, monkeypatch):
     c = json.loads(call(h, "/api/controls", method="GET")[1])
     assert not c["retry"] and not c["level"] and not c["next"] and "running" in c["why"]["level"]
     assert started == [] and ran == [] and server._TASKS == {}
-    # cooldown phase (unit active, job finished): retry may start, the probe still may not (port busy)
+    # cooldown phase (unit active, job finished): retry may start; the probe stops the cooldown first
     monkeypatch.setattr(config, "print_cancellable", lambda: False)
-    assert call(h, "/api/level")[0] == 409
+    stopped = []
+    monkeypatch.setattr(runner, "end_cooldown_if_idle", lambda: stopped.append(1))
+    assert call(h, "/api/level")[0] == 409 and stopped   # cooldown would not stop -> refused
     assert call(h, "/api/retry")[0] == 200 and started == [str(g)]
     h.shutdown()
 

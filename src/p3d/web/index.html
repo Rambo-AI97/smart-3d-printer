@@ -36,7 +36,7 @@ th{color:var(--mute);font-weight:500;font-size:12px}td.s-done{color:var(--ok)}td
 .cal{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font-size:14px}.cal span{color:var(--mute);font-size:12px;display:block}
 button.act{background:var(--accbg);color:var(--acc);border:1px solid var(--acc);border-radius:10px;padding:8px 16px;font:inherit;font-size:14px;cursor:pointer;margin:8px 8px 0 0}
 button.act:disabled{opacity:.4;cursor:default}.msg{font-size:13px;color:var(--mute);margin-top:6px}
-.idea{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.idea span{flex:1;word-break:break-word}
+.idea{display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--line);font-size:14px}.idea span{flex:1;word-break:break-word}.qth{width:56px;height:56px;object-fit:contain;border-radius:6px;background:var(--line);flex:none}
 select,input[type=text]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px}
 input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl{font-size:13px;margin-top:6px;color:var(--mute)}.tl b{color:var(--fg)}
 .pcards{display:grid;gap:10px;margin-top:10px}
@@ -286,7 +286,7 @@ async function post(url,msgId,body){const m=$(msgId);m.textContent='...';
     m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done');
     tick();queueLoad();return j}catch(e){m.textContent='failed: '+e;return{}}}
 async function queueLoad(){try{const q=await (await fetch('/api/queue',{cache:'no-store'})).json();
-  $('queue').innerHTML=q.map(e=>`<div class="idea"><span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
+  $('queue').innerHTML=q.map(e=>`<div class="idea">${e.job?`<img class="qth" loading="lazy" src="/api/job/${encodeURIComponent(e.job)}/preview.png" alt="" onerror="this.style.visibility='hidden'">`:''}<span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
 // ---- queue page, past prints page ----
 const pic=(j,name)=>j?`<img loading="lazy" src="/api/job/${encodeURIComponent(j)}/preview.png" alt="" onclick="zoom(this.src,'${encodeURIComponent(name||'')}')">`:'<div class="ph">no picture</div>';
 function zoom(src,name){if(!src)return;$('lb-img').src=src;$('lb-t').textContent=decodeURIComponent(name||'');$('lb').showModal()}
@@ -402,7 +402,7 @@ function lvlDraw(grid,span,verdict,when,turns){if(!grid||!grid.length)return;$('
   grid.forEach((row,i)=>row.forEach((v,j)=>{const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?'#3ecf8e':v>0?`rgba(239,83,80,${.35+.65*a})`:`rgba(78,161,255,${.35+.65*a})`;
     x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#000';x.fillText((v>0?'+':'')+v.toFixed(2),j*cw+cw/2,i*ch+ch/2+4)}));
   $('lvl-txt').innerHTML='Bed mesh ('+esc(when||'')+'): span <b>'+(span==null?D:span.toFixed(2))+' mm</b> '+esc(verdict||'')+'<br>Seen from the front: back row on top. Red = bed high, blue = low, green = flat. Good under 0.30 mm, usable under 0.60.'
-    +(turns&&turns.length?'<br><b>What to turn</b> (Allen key from the top, clockwise = bed corner down):<br>'+turns.map(t=>esc(t.corner)+': <b>'+esc(t.action)+'</b>'+(t.action==='leave it'?'':' ('+(t.mm>0?'too high':'too low')+' by '+Math.abs(t.mm).toFixed(2)+' mm)')).join('<br>')+'<br>Then press Check bed level again.':'')}
+    +(turns&&turns.length?'<br><b>What to turn</b> (Allen key from the top: &#8635; clockwise = corner down, &#8634; counter-clockwise = corner up):<br>'+turns.map(t=>esc(t.corner)+': <b>'+(t.action==='leave it'?'':/COUNTER/.test(t.action)?'<span style="font-size:1.3em">&#8634;</span> ':'<span style="font-size:1.3em">&#8635;</span> ')+esc(t.action)+'</b>'+(t.action==='leave it'?'':' ('+(t.mm>0?'too high':'too low')+' by '+Math.abs(t.mm).toFixed(2)+' mm)')).join('<br>')+'<br>Then press Check bed level again.':'')}
 // ---- reslice form ----
 let RS=null,rsTimer=0;
 async function openReslice(kind,idEnc){const id=decodeURIComponent(idEnc);RS={kind,id,job:''};$('rs-out').innerHTML='';$('rs-msg').textContent='';
