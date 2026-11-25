@@ -587,7 +587,9 @@ def cmd_setup(a):
 def cmd_printers(a):
     if not machines.roots():
         sys.exit("no Orca profile tree found: install Orca Slicer (p3d setup), or set P3D_ORCA_PROFILES")
-    found = machines.list_machines(a.query or "")
+    q = a.query or ""
+    a.query = q if isinstance(q, str) else " ".join(q)
+    found = machines.list_machines(a.query)
     for v, n in found:
         print(f"{n}  ({v})")
     print(f"{len(found)} printer{'s' if len(found) != 1 else ''}" + (f" matching '{a.query}'" if a.query else " in Orca's profiles"))
@@ -785,7 +787,7 @@ COMMANDS = {
           A("--serial", help="Bambu serial number"),
           A("--access-code", help="Bambu LAN access code")]),
         ("printers", cmd_printers, "list the printers Orca Slicer has profiles for (optional search words)",
-         [A("query", nargs="?", default="", help="e.g. mk4, 'ender 3 v3', 'a1 mini'")]),
+         [A("query", nargs="*", help="e.g. mk4, ender 3 v3, a1 mini")]),
         ("doctor", cmd_doctor, "check port, permissions, slicer, profiles, services; says how to fix",
          [A("-q", "--quiet", action="store_true", help="only problems")]),
         ("notify-test", cmd_notify_test, "send one test phone alert (normal + loud topic if daytime); no printer",

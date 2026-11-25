@@ -64,6 +64,9 @@ def _tree_ready():
 def pick_printer(query, current, interactive):
     """Search Orca's machine presets. Returns the preset name."""
     if not _tree_ready():
+        if not interactive and query and query.lower() not in current.lower():
+            sys.exit(f"can't look up '{query}': Orca Slicer's printer list was not found. Install Orca Slicer "
+                     "(install.sh does it), then run p3d setup again.")
         print("  no Orca profile list found (install Orca Slicer, run p3d setup again). Keeping " + current)
         return current
     while True:
