@@ -2,7 +2,7 @@
 
   - [#3] Text with #tags | note: free text | model: phone_stand.scad | job: 20261109-1120-phone_stand
 
-Edit it by hand (Obsidian): move a line under another heading to change its status; a line without [#id] gets one on the next save.
+Edit it by hand (any Markdown editor): move a line under another heading to change its status; a line without [#id] gets one on the next save.
 """
 import re
 

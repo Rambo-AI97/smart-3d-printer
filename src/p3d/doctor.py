@@ -48,6 +48,12 @@ def checks():
     yield (OK, "OpenSCAD", c.scad) if c.scad else \
         (WARN, "OpenSCAD", "not found (needed for scad, calib, previews) -> `sudo apt install openscad`")
 
+    from . import cad
+    kind, py = cad.find("build123d", "trimesh", "shapely")
+    yield (OK, "CAD tools", "installed in this Python") if kind == "process" else \
+        (OK, "CAD tools", f"in the venv {py}") if kind == "venv" else \
+        (WARN, "CAD tools", "not installed (needed for sheet, build, geometry checks) -> `p3d install-cad`")
+
     prof = c.profiles
     bad = []
     for f in ["machine.json"] + [f"process-{q}.json" for q in ("draft", "standard", "fine")] + \

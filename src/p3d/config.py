@@ -45,8 +45,11 @@ DEFAULTS = {
     "ideas_file": "",        # print-ideas board (Markdown, hand-editable); default <data_dir>/../ideas.md
     "z_home_xy": [110, 110], # where the printer probes Z on G28 (bed centre on the Ender-3 V3 SE); used by recover/addon
     "z_home_margin": 12,     # mm kept clear around that point before a recover/add-on may use G28
-    "fridge_dir": "",        # Fridge link folder (status.json, requests.json, approvals.json); default ~/second_brain/inbox/printer  # privacy-ok
-    "fridge_notes_ssh": True, # on a pass verdict for a Fridge request: ssh rambo 'rambo notes done N ...' (Nina gets a ping)  # privacy-ok
+    "fridge_dir": "",        # shared-notes link folder (status.json, requests.json, approvals.json); empty = feature off
+    "fridge_done_cmd": "",   # run on a pass verdict for a linked request; {n} = note number, {text} = message (shell-quoted); empty = off
+    "event_cmd": "",         # run per notification with {"title","msg","level","tags"} as JSON on stdin (log/webhook bridge); empty = off
+    "knowledge_files": [],   # dashboard Knowledge tab: [{id = "rules", title = "Rules", path = "~/notes/rules.md"}]; empty = tab hidden
+    "cad_python": "",        # python with build123d/trimesh/shapely when the cad extra is not installed in-process (see `p3d install-cad`)
     "park_y": 220,           # Y to park at on cancel (bed depth)
 }
 
@@ -137,7 +140,9 @@ class Config:
 
     @property
     def fridge(self):
-        return self._path("P3D_FRIDGE", "fridge_dir", HOME / "second_brain/inbox/printer")  # privacy-ok
+        """Link folder, or None when the feature is off (no fridge_dir / P3D_FRIDGE)."""
+        v = os.environ.get("P3D_FRIDGE") or self.raw.get("fridge_dir")
+        return pathlib.Path(v).expanduser() if v else None
 
     @property
     def control_ips(self):
@@ -272,17 +277,20 @@ def notify(title, msg, tags="printer", actions=None, urgent=False, now=None, qui
 
 
 def story(title, msg, tags="printer"):
-    """One event in the Rambo Logbook (`rambo logs printer`) per notification. Never raises; off in dry-run."""
+    """Hand one event to `event_cmd` (JSON on stdin: title, msg, level, tags). Never raises; off in dry-run and under pytest."""
     if os.environ.get("P3D_NOTIFY_DRYRUN") or os.environ.get("PYTEST_CURRENT_TEST"):
         return
     try:
-        sys.path.insert(0, os.path.expanduser("~/logbook"))
-        from rlog import rlog
+        cmd = get().raw.get("event_cmd")
+        if not cmd:
+            return
+        import shlex
+        t = title.lower()
+        level = "error" if ("fail" in t or "not started" in t) else "warn" if tags in ("warning", "stop_sign") else "info"
+        subprocess.run([os.path.expanduser(x) for x in shlex.split(cmd)], timeout=15, capture_output=True, text=True,
+                       input=json.dumps({"title": title, "msg": msg, "level": level, "tags": tags}))
     except Exception:
         return
-    t = title.lower()
-    level = "error" if ("fail" in t or "not started" in t) else "warn" if tags in ("warning", "stop_sign") else "info"
-    rlog("printer", level, f"{title}: {msg}", event=title)
 
 
 def spoken(title, msg, q=""):
@@ -326,14 +334,30 @@ def desktop_notify(title, msg):
         pass
 
 
-def web_base():
-    """Dashboard URL for ntfy action buttons: the Tailscale address (found at run time), else localhost."""
-    ip = ""
+def lan_ip():
+    """This machine's LAN address via a UDP socket trick (no packet is sent), or ''."""
+    import socket
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sk:
+            sk.connect(("192.0.2.1", 9))
+            ip = sk.getsockname()[0]
+        return "" if ip.startswith("127.") else ip
+    except OSError:
+        return ""
+
+
+def reach_ip():
+    """Address phones can use: Tailscale if present, else the LAN address, else ''."""
     try:
         ip = (subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=5).stdout.split() or [""])[0]
     except (OSError, subprocess.SubprocessError):
-        pass
-    return f"http://{ip or 'localhost'}:{get().web_port}"
+        ip = ""
+    return ip or lan_ip()
+
+
+def web_base():
+    """Dashboard URL for ntfy action buttons: Tailscale address, else the LAN address, else localhost (found at run time)."""
+    return f"http://{reach_ip() or 'localhost'}:{get().web_port}"
 
 
 # ---------- serial port access ----------

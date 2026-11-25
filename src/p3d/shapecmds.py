@@ -1,19 +1,18 @@
 """`p3d sheet` and `p3d build`: python (build123d) designs. The CAD work runs in the cad venv by subprocess,
-because p3d's own environment does not need build123d/trimesh/matplotlib."""
+so a bare p3d install (no `cad` extra) still works: the libs come from `p3d install-cad`."""
 import os
 import pathlib
 import subprocess
 import sys
 
-CAD_PYTHON = pathlib.Path(os.environ.get("P3D_CAD_PYTHON", "~/.venvs/cad/bin/python")).expanduser()
+from . import cad
 
 
 def _run_cad(module, *args):
-    """Run `python -m module args` in the cad venv with p3d importable. Prints its output; exits on failure."""
-    if not CAD_PYTHON.exists():
-        sys.exit(f"cad venv python not found: {CAD_PYTHON} (set P3D_CAD_PYTHON)")
+    """Run `python -m module args` where build123d lives (this Python or the cad venv). Exits on failure."""
+    py = cad.python_for("build123d")
     env = dict(os.environ, PYTHONPATH=str(pathlib.Path(__file__).resolve().parent.parent))
-    r = subprocess.run([str(CAD_PYTHON), "-m", module, *map(str, args)], capture_output=True, text=True, env=env)
+    r = subprocess.run([str(py), "-m", module, *map(str, args)], capture_output=True, text=True, env=env)
     if r.returncode:
         sys.exit((r.stderr or r.stdout)[-2000:])
     if "WARNING" in r.stderr:

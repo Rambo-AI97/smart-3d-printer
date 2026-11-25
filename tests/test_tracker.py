@@ -70,7 +70,7 @@ def test_old_rows_and_rate_mapping(tmp_path):
     assert (r["state"], r["verdict"], r["rating"]) == ("failed", "fail", "2")
 
 
-def test_pass_with_request_builds_ssh_command_dry_run(tmp_path, monkeypatch, capsys):
+def test_pass_with_request_builds_done_command_dry_run(tmp_path, monkeypatch, capsys):
     fridge.add_request(7, str(mkjob(tmp_path, "j1-cube").parent), "Alex", "Cube", shot=None)
     printlog.log_job(mkjob(tmp_path, "j1-cube"), "done", 10)
     sent = []
@@ -78,9 +78,11 @@ def test_pass_with_request_builds_ssh_command_dry_run(tmp_path, monkeypatch, cap
     tracker.set_verdict("last", "pass")
     assert sent[0][0] == "7"
     assert fridge.load_requests()[0]["state"] == "passed"
-    cmd = fridge.notes_cmd(7, "Cube is \"done\"")
-    assert cmd[:2] == ["ssh", "rambo"] and cmd[2].startswith("bash -lc ") and "rambo notes done 7" in cmd[2]
     monkeypatch.undo()
+    assert fridge.notes_cmd(7, "x") == [] and fridge.notes_done(7, "x") is None  # default: no command, nothing runs
+    monkeypatch.setitem(config.get().raw, "fridge_done_cmd", "notes-cli done {n} {text}")
+    cmd = fridge.notes_cmd(7, "Cube is \"done\"; rm -rf x")
+    assert cmd == ["notes-cli", "done", "7", 'Cube is "done"; rm -rf x']  # {text} stays one argument
     assert fridge.notes_done(7, "x") == fridge.notes_cmd(7, "x")  # under pytest: built, printed, never run
 
 

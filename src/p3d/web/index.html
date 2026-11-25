@@ -592,5 +592,6 @@ async function rqLoad(){let l;try{l=await (await fetch('/api/requests',{cache:'n
     ${q.change_text?`<div class="mt">asked for a change: ${esc(q.change_text)}</div>`:''}${q.error?`<div class="mt">${esc(q.error)}</div>`:''}</div></div>`).join('')||'<span class="msg">no requests yet</span>'}
 tick();ctlLoad();setInterval(ctlLoad,3000);logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);{const qs=new URLSearchParams(location.search);if(qs.get('embed')==='1')document.body.classList.add('embed');
 const want=(qs.get('tab')||location.hash.slice(1)).toLowerCase(),id=ALIAS[want]||want;if(['hist','stats','ideas','pq','ph','pm','kn','tr','rq'].includes(id))tab(id)}
+fetch('/api/features').then(r=>r.json()).then(f=>{let ch=0;if(!f.fridge){GROUPS.tracker=['tr'];ch=1}if(!f.knowledge){GROUPS.notes=['ideas'];ch=1}if(ch)tab(curTab)}).catch(()=>{});
 setInterval(()=>{if(curTab==='tr')trLoad();if(curTab==='rq')rqLoad()},10000);setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

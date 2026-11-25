@@ -1,6 +1,6 @@
 # Fridge link
 
-Plain JSON files in one folder (config `fridge_dir`, env `P3D_FRIDGE`; default `<hub>/inbox/printer`, synced by Syncthing). **One writer per file.** All times are local ISO `YYYY-MM-DDTHH:MM:SS`. p3d refreshes its files about every 30 s (in the `p3d-web` service) and on events (print start/end, verdict, request).
+Plain JSON files in one folder (config `fridge_dir`, env `P3D_FRIDGE`; empty = the whole link is off; point it at a synced folder to share it). **One writer per file.** All times are local ISO `YYYY-MM-DDTHH:MM:SS`. p3d refreshes its files about every 30 s (in the `p3d-web` service) and on events (print start/end, verdict, request).
 
 | File | Writer | Reader |
 |---|---|---|
@@ -61,9 +61,9 @@ A JSON array, append-only is fine; p3d remembers processed entries, so old ones 
 
 ## Verdicts
 
-After a print, the owner (or the dashboard Tracker tab) gives a verdict. On `pass` for a job linked to a Fridge note, p3d runs `ssh rambo bash -lc 'rambo notes done N "<plain words>"'` so the note is ticked and Alex gets a ping. Switch off with `fridge_notes_ssh = false`. Starting the next print without a verdict closes the previous job as `passed` ("assumed pass: plate cleared for next print"); this does not ping.
+After a print, the owner (or the dashboard Tracker tab) gives a verdict. On `pass` for a job linked to a Fridge note, p3d runs your `fridge_done_cmd` (a command template; `{n}` = note number, `{text}` = the plain-words message, both shell-quoted for you, e.g. `fridge_done_cmd = "notes-cli done {n} {text}"`) so the note is ticked and the requester gets a ping. Empty (the default) = no command. It never runs under pytest or `P3D_NOTES_DRYRUN`. Starting the next print without a verdict closes the previous job as `passed` ("assumed pass: plate cleared for next print"); this does not ping.
 
 ## Dashboard embed
 
-`http://<obsidian>:8765/?embed=1&tab=tracker` (tabs: `live`, `queue`, `models`, `past`, `tracker`, `requests`, `charts`, `history`, `ideas`, `knowledge`). `embed=1` hides the page header and the opaque edges for use in an iframe. The Pass/Fail buttons need the viewing device in `control_from`.
+`http://<this-pc>:8765/?embed=1&tab=tracker` (tabs: `live`, `queue`, `models`, `past`, `tracker`, `requests`, `charts`, `history`, `ideas`, `knowledge`). `embed=1` hides the page header and the opaque edges for use in an iframe. The Pass/Fail buttons need the viewing device in `control_from`.
 Read-only JSON: `/api/tracker`, `/api/requests`, shots at `/api/request/shot/<file>`.

@@ -1,28 +1,25 @@
 """Engineering helpers: pre-slice check, stress estimate, fit coupon, orientation.
 
-The heavy modules need trimesh/shapely/manifold3d. They run in-process when importable, otherwise in the cad venv
-(P3D_CAD_PYTHON, default ~/.venvs/cad/bin/python) through `call()`. If neither exists `call()` returns None.
+The heavy modules need trimesh/shapely/manifold3d (the `cad` extra). They run in-process when importable, otherwise in the
+CAD venv (env P3D_CAD_PYTHON / config `cad_python` / the default made by `p3d install-cad`) through `call()`.
+If neither exists `call()` returns None.
 """
 import json
-import os
 import pathlib
 import subprocess
 
+from .. import cad
+
 SRC = pathlib.Path(__file__).resolve().parents[2]
-NO_LIBS = "geometry libs missing (trimesh, shapely): install them or set P3D_CAD_PYTHON to the cad venv python; skipped"
+NO_LIBS = cad.NOT_INSTALLED
 
 
 def cad_python():
-    p = pathlib.Path(os.environ.get("P3D_CAD_PYTHON", "~/.venvs/cad/bin/python")).expanduser()
-    return p if p.exists() else None
+    return cad.configured_python()
 
 
 def _local():
-    try:
-        import trimesh, shapely  # noqa: F401
-        return True
-    except ImportError:
-        return False
+    return cad.importable("trimesh", "shapely")
 
 
 def call(mod, func, **kw):

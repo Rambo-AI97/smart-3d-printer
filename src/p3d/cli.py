@@ -166,12 +166,9 @@ def cmd_web(a):
         server.main()
         return
     urls = [f"http://localhost:{c.web_port}"]
-    try:  # LAN/Tailscale address for phones, found at run time (never hard-coded)
-        ip = subprocess.run(["tailscale", "ip", "-4"], capture_output=True, text=True, timeout=5).stdout.split()
-        if ip:
-            urls.append(f"http://{ip[0]}:{c.web_port}")
-    except (OSError, subprocess.SubprocessError):
-        pass
+    ip = config.reach_ip()  # Tailscale or LAN address for phones, found at run time (never hard-coded)
+    if ip:
+        urls.append(f"http://{ip}:{c.web_port}")
     if not config.unit_active("p3d-web"):
         if not (service_dir() / "p3d-web.service").exists():
             sys.exit("dashboard service not installed: p3d install-service  (or p3d web --foreground)")
@@ -564,6 +561,30 @@ def cmd_notify_test(a):
     print("sent" if sent else "nothing sent (check ntfy_url / urgent_ntfy_url)")
 
 
+def cmd_install_cad(a):
+    from . import cad
+    kind, py = cad.find("build123d", "trimesh", "shapely")
+    if kind == "process" and not a.force:
+        sys.exit("CAD tools are already installed in this Python (p3d[cad]); nothing to do")
+    py = cad.install()
+    print(f"CAD tools ready: {py} (p3d finds this venv by itself; no config needed)")
+
+
+def cmd_update(a):
+    """Upgrade p3d the way it was installed (uv tool, else pipx)."""
+    exe = pathlib.Path(sys.executable).resolve()
+    for tool, marker, cmd in (("uv", "/uv/tools/", ["uv", "tool", "upgrade", "p3d"]),
+                              ("pipx", "/pipx/venvs/", ["pipx", "upgrade", "p3d"])):
+        if marker in str(exe) and shutil.which(tool):
+            sys.exit(subprocess.run(cmd).returncode)
+    for tool, cmd in (("uv", ["uv", "tool", "upgrade", "p3d"]), ("pipx", ["pipx", "upgrade", "p3d"])):
+        if shutil.which(tool) and subprocess.run([tool, *(["tool", "list"] if tool == "uv" else ["list"])],
+                                                 capture_output=True, text=True).stdout.count("p3d"):
+            sys.exit(subprocess.run(cmd).returncode)
+    sys.exit("p3d was not installed with uv or pipx. Update it the way you installed it, e.g. "
+             "`pip install -U 'p3d[all] @ git+https://github.com/Rambo-AI97/smart-3d-printer'`")
+
+
 def cmd_install_service(a):
     from . import service
     service.install(start=not a.no_start)
@@ -655,8 +676,6 @@ COMMANDS = {
          [A("src"), A("-o", "--out"), A("--length", type=float, default=85, help="longest side mm"),
           A("--flat", type=float, default=0.0, help="cut this fraction of the height off for a flat base"),
           A("--thicken", type=float), A("--voxel", type=float)]),
-        ("game", cmd_game, "Godot game model by preset -> STL (~/.config/p3d/presets.json)",
-         [A("name"), A("--length", type=float)]),
         ("recover", cmd_recover, "continue a failed/cancelled print from its last good layer (writes a job, never prints)",
          [A("job", help="job folder / id"), A("--from-layer", type=int, help="last GOOD layer (default: recorded)"),
           A("--z", type=float, help="top height of the last good layer, mm")]),
@@ -710,12 +729,19 @@ COMMANDS = {
           A("--urgent", action="store_true", help="ring the loud topic even in quiet hours"),
           A("--only-urgent", action="store_true", help="send to the loud topic only, not the normal one"),
           A("-m", "--message", default="Test alert from p3d. If your phone rang through silent, loud alerts work.")]),
+        ("install-cad", cmd_install_cad, "install the CAD/engineering libraries (build123d, trimesh, ...) into their own venv",
+         [A("--force", action="store_true", help="build the venv even if the libraries import in this Python")]),
+        ("update", cmd_update, "upgrade p3d (uv tool upgrade, else pipx upgrade)", []),
         ("install-service", cmd_install_service, "write the systemd user units (web, print, cooldown)",
          [A("--no-start", action="store_true", help="write the units but don't start the dashboard")]),
     ],
 }
 
 COMMANDS["Engineer"] = ENG_COMMANDS
+
+if (config.CONFIG_DIR / "presets.json").exists():  # Godot game presets: only listed when you have set them up
+    COMMANDS["Design"].append(("game", cmd_game, "Godot game model by preset -> STL (presets.json in the config folder)",
+                               [A("name"), A("--length", type=float)]))
 
 
 from . import tracker as _tracker  # noqa: E402  (verdict, tracker, reopen, request)

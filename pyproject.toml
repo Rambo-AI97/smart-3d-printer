@@ -9,11 +9,15 @@ description = "Slice, print and track a Marlin 3D printer (Ender-3 V3 SE tested)
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
-dependencies = ["pyserial>=3.5"]
+dependencies = ["pyserial>=3.5", "pillow>=10"]
 keywords = ["3d-printing", "marlin", "orca-slicer", "openscad", "ender-3"]
 classifiers = ["Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Printing"]
 
 [project.optional-dependencies]
+# CAD/engineering libs (p3d sheet, build, check, stress, orient). build123d supports Python 3.11-3.14; 3.12 is the tested one.
+cad = ["build123d", "trimesh", "manifold3d", "shapely", "numpy", "scipy", "matplotlib", "pillow"]
+bambu = ["paho-mqtt>=2"]
+all = ["p3d[cad]", "p3d[bambu]"]
 dev = ["pytest>=7", "ruff>=0.5"]
 
 [project.scripts]

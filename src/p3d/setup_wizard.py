@@ -15,14 +15,18 @@ def ask(q, default="", yes=False):
 def toml_value(v):
     if isinstance(v, bool):
         return "true" if v else "false"
-    if isinstance(v, int):
+    if isinstance(v, (int, float)):
         return str(v)
+    if isinstance(v, (list, tuple)):
+        return "[" + ", ".join(toml_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{ " + ", ".join(f"{k} = {toml_value(x)}" for k, x in v.items()) + " }"
     return '"' + str(v).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
 def write(values):
     lines = ["# p3d config (p3d setup wrote this; edit freely). All keys: config.example.toml in the repo."]
-    lines += [f"{k} = {toml_value(v)}" for k, v in values.items() if v not in ("", None)]
+    lines += [f"{k} = {toml_value(v)}" for k, v in values.items() if v not in ("", None, [])]
     config.CONFIG_FILE.parent.mkdir(parents=True, exist_ok=True)
     config.CONFIG_FILE.write_text("\n".join(lines) + "\n")
 

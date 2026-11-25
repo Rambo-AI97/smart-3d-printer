@@ -949,30 +949,40 @@ def spool_edit(b):
     return f"loaded: {s['name']} ({s['material'].upper()}, {round(float(s['left_g']))} g left)"
 
 
-# ---- knowledge tab: a fixed allowlist of hub markdown files (never a path from the client) ----
+# ---- knowledge tab: only files listed in config `knowledge_files` (never a path from the client); no list = tab hidden ----
 
-KNOWLEDGE = (("rules", "Rules", "rules.md"), ("filaments", "Filament guide", "filaments.md"),
-             ("lessons", "Lessons", "lessons"), ("ideas", "Ideas", "ideas.md"))
 MAX_KNOWLEDGE = 512 * 1024
 
 
+def knowledge_entries():
+    """[(id, title, Path)] from config knowledge_files = [{id, title, path}]; malformed entries are skipped."""
+    out = []
+    for e in config.get().raw.get("knowledge_files") or []:
+        try:
+            kid, path = str(e["id"]), pathlib.Path(str(e["path"])).expanduser()
+        except (KeyError, TypeError):
+            continue
+        out.append((kid, str(e.get("title") or kid), path))
+    return out
+
+
 def knowledge_path(kid):
-    """Allowlisted file for an id, resolved from data_dir (<hub>/projects/3d-printer/data); None for any other id."""
-    data = config.get().data.resolve()
-    for k, _, f in KNOWLEDGE:
+    """The configured file for an id, or None for any other id."""
+    for k, _, p in knowledge_entries():
         if k == kid:
-            if k == "lessons":  # <hub>/_system/lessons/printer.md
-                return data.parents[2] / "_system/lessons/printer.md" if len(data.parents) > 2 else None
-            return data.parent / f
+            return p
     return None
 
 
 def knowledge_list():
     out = []
-    for k, title, _ in KNOWLEDGE:
-        p = knowledge_path(k)
-        out.append({"id": k, "title": title, "exists": bool(p and p.is_file()), "size": p.stat().st_size if p and p.is_file() else 0})
+    for k, title, p in knowledge_entries():
+        out.append({"id": k, "title": title, "exists": p.is_file(), "size": p.stat().st_size if p.is_file() else 0})
     return out
+
+
+def features():
+    return {"fridge": fridge.enabled(), "knowledge": bool(knowledge_entries())}
 
 
 def knowledge_read(kid):
@@ -1139,11 +1149,14 @@ class H(BaseHTTPRequestHandler):
             self.send(json.dumps(log_rows()).encode(), "application/json")
         elif path == "/api/tracker":
             self.send(json.dumps(tracker.items()).encode(), "application/json")
+        elif path == "/api/features":
+            self.send(json.dumps(features()).encode(), "application/json")
         elif path == "/api/requests":
             self.send(json.dumps(fridge.load_requests()).encode(), "application/json")
         elif path.startswith("/api/request/shot/"):
-            f = config.get().fridge / "shots" / pathlib.Path(path[len("/api/request/shot/"):]).name  # basename only
-            if f.is_file():
+            fd = config.get().fridge
+            f = fd / "shots" / pathlib.Path(path[len("/api/request/shot/"):]).name if fd else None  # basename only
+            if f and f.is_file():
                 self.send(f.read_bytes(), "image/jpeg")
             else:
                 self.send(b"not found", "text/plain", 404)

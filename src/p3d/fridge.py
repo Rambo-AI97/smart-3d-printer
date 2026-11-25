@@ -1,4 +1,4 @@
-"""Fridge link: plain files in <fridge_dir> (default <hub>/inbox/printer), one writer per file, synced by Syncthing.
+"""Fridge link: plain files in <fridge_dir> (config `fridge_dir`; empty = the whole link is off), one writer per file, synced by Syncthing.
 
   status.json    p3d writes (printer, spool, queue, last tracker items), refreshed every ~30 s and on events
   requests.json  p3d writes (print requests linked to Fridge notes)
@@ -43,11 +43,17 @@ def _read(path, default):
 
 # ---------- requests.json ----------
 
+def enabled():
+    return config.get().fridge is not None
+
+
 def req_file():
     return config.get().fridge / "requests.json"
 
 
 def load_requests():
+    if not enabled():
+        return []
     d = _read(req_file(), {})
     return d.get("requests", []) if isinstance(d, dict) else []
 
@@ -67,6 +73,8 @@ def resolve_job(job):
 def add_request(note, job, who="", title="", shot=None, reprint_of=None):
     """Create/replace the request for NOTE+JOB: copies a shot JPG into shots/ and tags the job (job.json) for the log."""
     from . import printlog
+    if not enabled():
+        raise ValueError("Fridge link is off: set fridge_dir in the p3d config")
     d = resolve_job(job)
     g = next(d.glob("*.gcode"), None)
     info = printlog.gcode_info(g) if g else {}
@@ -125,25 +133,28 @@ def on_job_logged(row):
     refresh()
 
 
-# ---------- verdict ping to Alex ----------
+# ---------- verdict ping ----------
 
 def notes_cmd(n, text):
-    """argv for: ssh rambo bash -lc 'rambo notes done N "text"' (ssh joins argv with spaces, so the quoting is inside)."""
-    return ["ssh", "rambo", "bash -lc " + shlex.quote(f"rambo notes done {int(n)} {shlex.quote(text)}")]
+    """argv for `fridge_done_cmd` with {n} (int) and {text} filled in, each shell-quoted; [] when the command is off."""
+    tpl = config.get().raw.get("fridge_done_cmd") or ""
+    if not tpl:
+        return []
+    return shlex.split(tpl.replace("{n}", shlex.quote(str(int(n)))).replace("{text}", shlex.quote(text)))
 
 
 def notes_done(n, text):
-    """Tick Fridge note N done (the other person phone pings). No-op when fridge_notes_ssh is false; never ssh under pytest / dry-run."""
-    if not config.get().fridge_notes_ssh:
-        return None
+    """Tick note N done via `fridge_done_cmd` (the other person gets pinged). No-op when it is empty; never runs under pytest / dry-run."""
     cmd = notes_cmd(n, text)
+    if not cmd:
+        return None
     if os.environ.get("P3D_NOTES_DRYRUN") or os.environ.get("PYTEST_CURRENT_TEST"):
         print("[dry-run]", " ".join(shlex.quote(c) for c in cmd), file=sys.stderr)
         return cmd
     try:
         subprocess.run(cmd, timeout=30, capture_output=True)
     except (OSError, subprocess.SubprocessError) as e:
-        print(f"p3d: notes done {n} failed: {e}", file=sys.stderr)
+        print(f"p3d: fridge_done_cmd for note {n} failed: {e}", file=sys.stderr)
     return cmd
 
 
@@ -187,6 +198,8 @@ def status():
 
 
 def write_status():
+    if not enabled():
+        return
     atomic_write(config.get().fridge / "status.json", status())
 
 
@@ -211,6 +224,8 @@ def approval_id(a):
 def process_approvals():
     """Read approvals.json once per new entry: approve -> queue (never start), change -> store text. Returns [(id, outcome)]."""
     from . import runner
+    if not enabled():
+        return []
     items = _read(config.get().fridge / "approvals.json", [])
     if not isinstance(items, list):
         return []
@@ -258,6 +273,8 @@ def start_loop(every=30):
         while True:
             poll()
             time.sleep(every)
+    if not enabled():
+        return None
     t = threading.Thread(target=run, daemon=True, name="fridge-link")
     t.start()
     return t

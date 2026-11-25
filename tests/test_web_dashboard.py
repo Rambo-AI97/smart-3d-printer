@@ -17,8 +17,15 @@ def hub(tmp_path, monkeypatch):
     (tmp_path / "hub/_system/lessons").mkdir(parents=True)
     monkeypatch.setenv("P3D_DATA", str(data))
     monkeypatch.setenv("P3D_JOBS", str(tmp_path / "jobs"))
+    hub = tmp_path / "hub"
+    files = {"rules": ("Rules", "projects/3d-printer/rules.md"), "filaments": ("Filament guide", "projects/3d-printer/filaments.md"),
+             "lessons": ("Lessons", "_system/lessons/printer.md"), "ideas": ("Ideas", "projects/3d-printer/ideas.md")}
+    cfg = tmp_path / "config.toml"
+    cfg.write_text("knowledge_files = [" + ", ".join(
+        f'{{ id = "{k}", title = "{t}", path = "{hub / p}" }}' for k, (t, p) in files.items()) + "]\n")
+    monkeypatch.setattr(config, "CONFIG_FILE", cfg)
     config.reset()
-    return tmp_path / "hub"
+    return hub
 
 
 def mkjob(tmp_path, name, proc=None, meta=None, model=None, fil="PETG"):
@@ -72,6 +79,17 @@ def test_knowledge_save_atomic_with_bak_and_refusals(hub, monkeypatch):
     assert call(h, "/api/knowledge/save", {"id": "rules"})[0] == 409  # no text
     assert call(h, "/api/knowledge/save", {"id": "rules", "text": "x" * 600000})[0] == 409
     assert f.read_text() == "new text"
+    h.shutdown()
+
+
+def test_knowledge_off_without_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "CONFIG_FILE", tmp_path / "none.toml")
+    config.reset()
+    assert server.knowledge_list() == [] and server.knowledge_path("rules") is None
+    assert server.features() == {"fridge": False, "knowledge": False}
+    h = serve(monkeypatch)
+    assert json.loads(call(h, "/api/knowledge", method="GET")[1]) == []
+    assert call(h, "/api/knowledge/save", {"id": "rules", "text": "x"})[0] == 409
     h.shutdown()
 
 

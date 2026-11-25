@@ -12,8 +12,9 @@ library in `src/p3d/shapes/` builds one smooth solid (true fillets, swept hooks)
 ```
 
 `p3d sheet` also takes an `.stl` path or a `models/scad/NAME` STL, so old designs get the same check.
-Sheets land in `~/.local/share/p3d/shots/`. The CAD code runs in a separate venv (`~/.venvs/cad`, override with
-`P3D_CAD_PYTHON`) so p3d itself needs no build123d. `p3d make` for `.scad` is unchanged.
+Sheets land in `~/.local/share/p3d/shots/`. The CAD libraries come with `p3d[all]` (the one-line installer does this). Otherwise run `p3d install-cad`: it builds
+`~/.local/share/p3d/cad-venv` (Python 3.12; build123d supports 3.11-3.14) and p3d finds it by itself. To use a Python of
+your own, set `P3D_CAD_PYTHON` or `cad_python` in the config. Lookup order: this Python, then that, then the default venv. `p3d make` for `.scad` is unchanged.
 
 ## Library (`from p3d.shapes import ...`, all mm, each function documents printing notes)
 

@@ -8,10 +8,18 @@ Simple enough for an AI assistant to drive safely. Tested on a Creality **Ender-
 
 ## Quick start
 
-You need Linux, Python 3.11+, [pipx](https://pipx.pypa.io), [Orca Slicer](https://github.com/SoftFever/OrcaSlicer/releases)
+One line (Linux; installs uv, p3d with the CAD libraries and Orca Slicer, then runs setup and the checks):
+
+```
+curl -fsSL https://raw.githubusercontent.com/Rambo-AI97/smart-3d-printer/main/install.sh | bash
+```
+
+Flags go after `bash -s --`: `--yes` (no questions), `--no-orca`, `--no-setup`. Update later with `p3d update`.
+
+By hand you need Linux, Python 3.11+, [Orca Slicer](https://github.com/SoftFever/OrcaSlicer/releases)
 (the AppImage is fine) and, optionally, [OpenSCAD](https://openscad.org) for parts and previews.
 
-1. **Install:** `pipx install git+https://github.com/Rambo-AI97/smart-3d-printer`
+1. **Install:** `uv tool install --python 3.12 "p3d[all] @ git+https://github.com/Rambo-AI97/smart-3d-printer"` (or `pipx install git+https://github.com/Rambo-AI97/smart-3d-printer`, then `p3d install-cad`). Extras: `cad` (build123d, trimesh, shapely, manifold3d), `bambu`, `all`.
 2. **Set up:** plug in the printer, switch it on, run `p3d setup` (finds the port and the slicer, asks for optional phone alerts).
 3. **Check:** `p3d install-service`, then `p3d doctor`. Fix any ✗ line it shows (it tells you how).
 4. **Slice:** `p3d slice my-part.stl` → prints the G-code path, time and grams.
@@ -55,7 +63,7 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 
 ### Smart features
 
-- **Engineer tools** (`p3d.eng`): need trimesh/shapely/manifold3d; used in-process if installed, else run in the venv named by `P3D_CAD_PYTHON` (default `~/.venvs/cad/bin/python`), and skipped with a message if neither exists.
+- **Engineer tools** (`p3d.eng`): need trimesh/shapely/manifold3d (the `cad` extra, included in `p3d[all]`); used in-process if installed, else run in the venv from `p3d install-cad` (or the Python in `P3D_CAD_PYTHON` / config `cad_python`), and skipped with a message if neither exists.
 - **Slice advisor:** runs after every `p3d slice`, `p3d queue add` and dashboard (re)slice, and at the end of `p3d inspect`; it flags problems before you print (tall part without brim, support-heavy or unused supports, heavy walls/infill on a small part, off-centre or bad-mesh placement, filament vs active spool, long fine prints); thresholds are constants in `advisor.py`, `advise(info)` is reusable.
 - **Bed step-down:** PETG first layer 70 C, then 60 C (PLA 60/55); set in `flatten_profile.py`, applied to every plate variant.
 - **Pause/resume** works on stock Marlin: the sender stops at a layer boundary, retracts, lifts and parks; resume returns, primes and carries on. The dashboard and the ntfy message have Pause/Resume buttons (POST `/api/pause`, `/api/resume`).

@@ -32,3 +32,16 @@ ideas_file = ""      # print-ideas board (Markdown); default <data_dir>/../ideas
 # Where the printer probes Z (G28) and the clearance kept around it before p3d recover/addon may use G28.
 z_home_xy = [110, 110]
 z_home_margin = 12
+
+# ---- Optional integrations (all off by default) ----
+# CAD tools (build123d, trimesh, ...). Installed with p3d[all]; otherwise `p3d install-cad` makes a venv that is found automatically.
+# Only set this to use a Python you built yourself.
+cad_python = ""
+# Shared notes folder (status.json, requests.json, approvals.json; see docs/fridge-link.md). Empty = off.
+fridge_dir = ""
+# Run when a request-linked print passes. {n} = note number, {text} = message (quoted for you). Empty = off.
+fridge_done_cmd = ""      # e.g. "notes-cli done {n} {text}"
+# Run per notification with {"title","msg","level","tags"} as JSON on stdin (forward events to your own log/webhook). Empty = off.
+event_cmd = ""
+# Dashboard Knowledge tab: only these files can be read and edited (atomic save, previous version kept as .bak). Empty = tab hidden.
+# knowledge_files = [{ id = "rules", title = "Rules", path = "~/notes/printer-rules.md" }]
