@@ -536,10 +536,10 @@ def test_doctor_network(serve):
     s = serve({("GET", "/server/info"): {"result": {}}})
     config.get().raw.update(printer_type="klipper", printer_url=s.url)
     rows = {n: (lv, m) for lv, n, m in doctor.checks()}
-    assert rows["printer"][0] == "ok" and "printer port" not in rows
+    assert rows["printer link"][0] == "ok" and "printer port" not in rows
     config.get().raw["printer_url"] = "http://127.0.0.1:1"
     rows = {n: (lv, m) for lv, n, m in doctor.checks()}
-    assert rows["printer"][0] == "FAIL"
+    assert rows["printer link"][0] == "FAIL"
 
 
 def test_runner_refuses_pause_at_for_octoprint(job):
