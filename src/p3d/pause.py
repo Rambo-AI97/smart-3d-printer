@@ -7,17 +7,17 @@ Control files in the state dir: PAUSE (pause at the next layer), pause_at.json (
 import json
 
 from . import config
-from .gcode import Z_MAX, _fmt
+from .gcode import z_max, _fmt
 
 RETRACT, LIFT, PRIME = 2.0, 10.0, 0.5
 
 
-def pause_cmds(pos, park_y=220, retract=RETRACT, lift=LIFT):
+def pause_cmds(pos, park_y=None, retract=RETRACT, lift=LIFT):
     """Commands that park the head. None if the position is not known yet (nothing printed)."""
     if pos.z is None:
         return None
     return ["M400", "M83", f"G1 E-{_fmt(retract)} F2400", "G90",
-            f"G1 Z{_fmt(min(pos.z + lift, Z_MAX))} F600", f"G1 X0 Y{_fmt(park_y)} F6000"]
+            f"G1 Z{_fmt(min(pos.z + lift, z_max()))} F600", f"G1 X0 Y{_fmt(config.get().park_y if park_y is None else park_y)} F6000"]
 
 
 def resume_cmds(pos, nozzle=0.0, retract=RETRACT, prime=PRIME):

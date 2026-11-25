@@ -20,6 +20,7 @@ PROFILES = PKG / "profiles"
 XDG_CONFIG = pathlib.Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 XDG_DATA = pathlib.Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share"))
 XDG_STATE = pathlib.Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state"))
+XDG_CACHE = pathlib.Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache"))
 CONFIG_FILE = pathlib.Path(os.environ.get("P3D_CONFIG", XDG_CONFIG / "p3d/config.toml"))
 CONFIG_DIR = CONFIG_FILE.parent
 
@@ -48,14 +49,16 @@ DEFAULTS = {
     "cancel_from": [],       # extra IPs allowed to POST /api/cancel (localhost always is), e.g. a home server
     "control_from": [],      # extra IPs allowed to POST the other control endpoints (pause, resume, queue, ideas); cancel_from counts too
     "ideas_file": "",        # print-ideas board (Markdown, hand-editable); default <data_dir>/../ideas.md
-    "z_home_xy": [110, 110], # where the printer probes Z on G28 (bed centre on the Ender-3 V3 SE); used by recover/addon
+    "z_home_xy": [],         # where Z is probed on G28; empty = bed centre (Ender: 110,110); used by recover/addon
     "z_home_margin": 12,     # mm kept clear around that point before a recover/add-on may use G28
     "fridge_dir": "",        # shared-notes link folder (status.json, requests.json, approvals.json); empty = feature off
     "fridge_done_cmd": "",   # run on a pass verdict for a linked request; {n} = note number, {text} = message (shell-quoted); empty = off
     "event_cmd": "",         # run per notification with {"title","msg","level","tags"} as JSON on stdin (log/webhook bridge); empty = off
     "knowledge_files": [],   # dashboard Knowledge tab: [{id = "rules", title = "Rules", path = "~/notes/rules.md"}]; empty = tab hidden
     "cad_python": "",        # python with build123d/trimesh/shapely when the cad extra is not installed in-process (see `p3d install-cad`)
-    "park_y": 220,           # Y to park at on cancel (bed depth)
+    "park_y": 0,             # Y to park at on cancel; 0 = bed depth (220 on the Ender-3 V3 SE)
+    "printer_model": "Creality Ender-3 V3 SE 0.4 nozzle",  # any machine Orca Slicer has a profile for (p3d printers)
+    "bed_size": [],          # [x, y] or [x, y, z] mm; empty = read from the machine profile (p3d setup caches it)
 }
 
 
@@ -160,6 +163,32 @@ class Config:
         return own if (own / "machine.json").exists() else PROFILES
 
     @property
+    def bed(self):
+        """Build volume (x, y, z) in mm: bed_size if set, else the printer_model's Orca profile, else the Ender-3 V3 SE."""
+        from . import machines
+        v = [float(n) for n in (self.raw.get("bed_size") or [])]
+        if len(v) in (2, 3) and all(n > 0 for n in v):
+            return (v[0], v[1], v[2] if len(v) == 3 else machines.DEFAULT_BED[2])
+        model = self.raw.get("printer_model") or machines.DEFAULT_MODEL
+        if model != machines.DEFAULT_MODEL:
+            try:
+                g = machines.geometry(model)
+                if g["x"] > 0 and g["y"] > 0:
+                    return (g["x"], g["y"], g["z"] or machines.DEFAULT_BED[2])
+            except (KeyError, OSError):
+                pass
+        return machines.DEFAULT_BED
+
+    @property
+    def park_y(self):
+        return self.raw.get("park_y") or _whole(self.bed[1])
+
+    @property
+    def z_home_xy(self):
+        v = self.raw.get("z_home_xy")
+        return list(v) if v else [_whole(self.bed[0] / 2), _whole(self.bed[1] / 2)]
+
+    @property
     def port(self):
         return os.environ.get("P3D_PORT") or self.raw.get("port") or (find_ports() or [""])[0]
 
@@ -170,6 +199,11 @@ class Config:
     @property
     def scad(self):
         return _tool(self.raw.get("openscad")) or shutil.which("openscad") or ""
+
+
+def _whole(x):
+    """220.0 -> 220 (G-code and TOML read better without the .0)."""
+    return int(x) if float(x).is_integer() else x
 
 
 def _tool(v):

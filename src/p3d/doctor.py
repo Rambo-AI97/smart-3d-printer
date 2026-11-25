@@ -23,6 +23,19 @@ def checks():
     except ImportError:
         yield FAIL, "pyserial", "missing -> reinstall p3d (pipx install --force ...)"
 
+    from . import machines
+    model = c.printer_model
+    bx, by, bz = c.bed
+    note = f"{model}, bed {bx:.0f} x {by:.0f} x {bz:.0f} mm, via {c.printer_type}"
+    if model == machines.DEFAULT_MODEL:
+        yield OK, "printer", note
+    elif not machines.roots():
+        yield WARN, "printer", f"{note} (no Orca profile list found to verify it -> `p3d setup`)"
+    elif machines.vendor_of(model) is None:
+        yield WARN, "printer", f"{model} not found in Orca's profiles -> `p3d printers` to see names, then `p3d setup`"
+    else:
+        yield OK, "printer", note
+
     ptype = str(c.printer_type or "marlin").lower()
     port = c.port
     if ptype != "marlin":
@@ -31,9 +44,9 @@ def checks():
             b = printers.get_backend(c)
             b.ping()
             b.close()
-            yield OK, "printer", f"{ptype} printer answers ({c.printer_url or 'bambu LAN'})"
+            yield OK, "printer link", f"{ptype} printer answers ({c.printer_url or 'bambu LAN'})"
         except printers.BackendError as e:
-            yield FAIL, "printer", f"{e} -> check printer_url / printer_api_key / power and network"
+            yield FAIL, "printer link", f"{e} -> check printer_url / printer_api_key / power and network"
     elif not port:
         yield FAIL, "printer port", "no USB serial device -> plug in the printer, power it on, check the cable"
     elif not os.path.exists(port):

@@ -9,6 +9,8 @@ import json
 import pathlib
 import re
 
+from . import config
+
 # Rule 1: tall and narrow without a brim
 TALL_RATIO = 2.5            # max_z / smaller footprint side
 TALL_MM, NARROW_MM = 40.0, 30.0
@@ -20,7 +22,6 @@ SMALL_G = 15.0
 HEAVY_WALLS, HEAVY_INFILL = 5, 35.0
 LIGHT_WALLS, LIGHT_INFILL = 3, 15.0
 # Rule 4: placement and bed mesh
-BED_DEFAULT = (220.0, 220.0)
 OFF_CENTRE_MM = 60.0        # centre of the part this far from the bed centre
 BACK_LEFT_MARGIN = 10.0     # past the bed centre in X (left) and Y (back)
 MESH_DEV_MM = 0.3
@@ -72,7 +73,7 @@ def advise(info):
     """info -> list of advice lines (empty = nothing to flag). Missing keys just skip their rule."""
     out = []
     fp = info.get("footprint")
-    bed = tuple(info.get("bed") or BED_DEFAULT)
+    bed = tuple(info.get("bed") or config.get().bed[:2])
     grams = _num(info.get("grams"), 0.0) or 0.0
     shares = info.get("shares") or {}
     # 1 tall and narrow

@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 
-from . import __version__, config, runner
+from . import __version__, config, machines, runner
 from .config import FINAL, print_running, read_state
 
 
@@ -202,6 +202,20 @@ def _need(tool, path):
     return path
 
 
+def _gcode_from_3mf(bundle, dest):
+    """Pull the plate's G-code out of a sliced .gcode.3mf (zip: Metadata/plate_1.gcode). Returns dest or None."""
+    import zipfile
+    try:
+        with zipfile.ZipFile(bundle) as z:
+            name = next((n for n in sorted(z.namelist()) if n.lower().endswith(".gcode")), None)
+            if not name:
+                return None
+            dest.write_bytes(z.read(name))
+            return dest
+    except (OSError, zipfile.BadZipFile):
+        return None
+
+
 def slice_model(model, quality="standard", filament="petg", supports=False, brim=False, walls=None, infill=None,
                 keep_orient=False, proc_extra=None, tag=""):
     """Orca CLI slice into a new job dir. Returns (job_dir, final_gcode, info dict). Exits on failure."""
@@ -235,12 +249,19 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
            "--load-settings", f"{prof}/machine.json;{pj}",
            "--load-filaments", f"{prof}/filament-{filament}.json",
            "--outputdir", str(out), str(model)]
+    bundle = None
+    if c.printer_type == "bambu" or machines.is_bambu(c.printer_model):
+        # Bambu printers take a sliced .gcode.3mf over the network; keep a plain .gcode copy for time/grams parsing
+        bundle = out / f"{model.stem}.gcode.3mf"
+        cmd[cmd.index("--outputdir"):cmd.index("--outputdir")] = ["--export-3mf", bundle.name]  # a bare name: Orca puts it in --outputdir
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
         res = json.load(open(out / "result.json"))
     except FileNotFoundError:
         res = {"return_code": -1, "error_string": "Orca wrote no result.json"}
     g = next(out.glob("*.gcode"), None)
+    if not g and bundle and bundle.exists():
+        g = _gcode_from_3mf(bundle, out / "plate.gcode")
     if res.get("return_code") != 0 or not g:
         sys.exit(f"slice failed: {res.get('error_string')}")
     final = out / f"{model.stem}{'_' + tag if tag else ''}.gcode"
@@ -251,9 +272,14 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
                      r"nozzle_temperature|bed_temperature) = (.*)", line)
         if m:
             info.setdefault(m.group(1), m.group(2))
+        elif line.startswith("; model printing time: "):    # Bambu header
+            info.setdefault("estimated printing time (normal mode)", line[23:].split(";")[0].strip())
+        elif line.startswith("; filament used [g] = "):
+            info.setdefault("total filament used [g]", line.split("=")[1].strip())
         elif line.startswith("M190 S"):
             info.setdefault("bed_temperature", line.split()[1][1:])
-    (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final), "settings": {
+    (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final),
+                                              **({"bundle": str(bundle)} if bundle and bundle.exists() else {}), "settings": {
         "quality": quality, "filament": filament, "supports": bool(supports),
         "brim": brim if brim and not isinstance(brim, bool) else bool(brim), "walls": walls,
         "infill": infill, "keep_orient": bool(keep_orient)}}))
@@ -554,7 +580,17 @@ def cmd_import(_):
 
 def cmd_setup(a):
     from . import setup_wizard
-    setup_wizard.run(defaults=a.yes)
+    setup_wizard.run(defaults=a.yes, printer=a.printer, connection=a.connection, url=a.url, api_key=a.api_key,
+                     serial=a.serial, access_code=a.access_code)
+
+
+def cmd_printers(a):
+    if not machines.roots():
+        sys.exit("no Orca profile tree found: install Orca Slicer (p3d setup), or set P3D_ORCA_PROFILES")
+    found = machines.list_machines(a.query or "")
+    for v, n in found:
+        print(f"{n}  ({v})")
+    print(f"{len(found)} printer{'s' if len(found) != 1 else ''}" + (f" matching '{a.query}'" if a.query else " in Orca's profiles"))
 
 
 def cmd_doctor(a):
@@ -740,8 +776,16 @@ COMMANDS = {
         ("import-history", cmd_import, "add past G-code files found on this PC to the log", []),
     ],
     "Setup": [
-        ("setup", cmd_setup, "first-run wizard: port, slicer, OpenSCAD, ntfy -> config file",
-         [A("-y", "--yes", action="store_true", help="accept detected defaults, no questions")]),
+        ("setup", cmd_setup, "first-run wizard: printer, connection, slicer, OpenSCAD, ntfy -> config file",
+         [A("-y", "--yes", action="store_true", help="accept detected defaults, no questions"),
+          A("--printer", metavar="NAME", help="printer to search for in Orca's profiles, e.g. 'Prusa MK4'"),
+          A("--connection", choices=["marlin", "klipper", "octoprint", "prusalink", "bambu"], help="how p3d talks to it"),
+          A("--url", help="printer address (klipper/octoprint/prusalink; Bambu: its IP)"),
+          A("--api-key", help="octoprint / prusalink key"),
+          A("--serial", help="Bambu serial number"),
+          A("--access-code", help="Bambu LAN access code")]),
+        ("printers", cmd_printers, "list the printers Orca Slicer has profiles for (optional search words)",
+         [A("query", nargs="?", default="", help="e.g. mk4, 'ender 3 v3', 'a1 mini'")]),
         ("doctor", cmd_doctor, "check port, permissions, slicer, profiles, services; says how to fix",
          [A("-q", "--quiet", action="store_true", help="only problems")]),
         ("notify-test", cmd_notify_test, "send one test phone alert (normal + loud topic if daytime); no printer",
