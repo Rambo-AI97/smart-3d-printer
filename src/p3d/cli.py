@@ -216,7 +216,7 @@ def _gcode_from_3mf(bundle, dest):
         return None
 
 
-def slice_model(model, quality="standard", filament="petg", supports=False, brim=False, walls=None, infill=None,
+def slice_model(model, quality="standard", filament="pla", supports=False, brim=False, walls=None, infill=None,
                 keep_orient=False, proc_extra=None, tag=""):
     """Orca CLI slice into a new job dir. Returns (job_dir, final_gcode, info dict). Exits on failure."""
     c = cfg()
@@ -277,7 +277,7 @@ def slice_model(model, quality="standard", filament="petg", supports=False, brim
         elif line.startswith("; filament used [g] = "):
             info.setdefault("total filament used [g]", line.split("=")[1].strip())
         elif line.startswith("M190 S"):
-            info.setdefault("bed_temperature", line.split()[1][1:])
+            info.setdefault("bed_temperature", line.split()[1][1:].rstrip(";"))
     (out / "job.json").write_text(json.dumps({"model": str(model), "gcode": str(final),
                                               **({"bundle": str(bundle)} if bundle and bundle.exists() else {}), "settings": {
         "quality": quality, "filament": filament, "supports": bool(supports),
@@ -658,7 +658,7 @@ from .eng.commands import COMMANDS as ENG_COMMANDS, MAKE_ARGS  # noqa: E402  (li
 
 QUAL = A("-q", "--quality", default="standard", choices=["draft", "standard", "fine"])
 def default_filament():
-    """Active spool's material, else config 'filament', else petg."""
+    """Active spool's material, else config 'filament', else pla."""
     try:
         from . import spools
         s = spools.active(spools.load())
@@ -666,12 +666,12 @@ def default_filament():
             return s["material"]
     except Exception:
         pass
-    f = str(config.Config().raw.get("filament", "petg")).lower()
-    return f if f in ("pla", "petg", "tpu") else "petg"
+    f = str(config.Config().raw.get("filament", "pla")).lower()
+    return f if f in ("pla", "petg", "tpu") else "pla"
 
 
 FIL = A("-f", "--filament", default=default_filament(), choices=["pla", "petg", "tpu"],
-        help="default: active spool material, else config 'filament', else petg")
+        help="default: active spool material, else config 'filament', else pla")
 
 COMMANDS = {
     "Print": [
