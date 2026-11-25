@@ -72,6 +72,12 @@ def start(gcode, force=False, pause_at=(), confirm_z=False, stop_cooldown=False)
     if not ok and not force:
         raise Refuse(f"{msg} (--force to print anyway)")
     c = config.get()
+    try:  # a new print means the plate was cleared: finished jobs still in `check` pass (tracker.auto_close)
+        from . import fridge, tracker
+        tracker.auto_close()
+        fridge.on_job_start(g.parent.name)
+    except Exception:
+        pass
     c.stop.unlink(missing_ok=True)
     c.pause.unlink(missing_ok=True)
     c.resume.unlink(missing_ok=True)

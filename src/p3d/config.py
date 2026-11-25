@@ -45,6 +45,8 @@ DEFAULTS = {
     "ideas_file": "",        # print-ideas board (Markdown, hand-editable); default <data_dir>/../ideas.md
     "z_home_xy": [110, 110], # where the printer probes Z on G28 (bed centre on the Ender-3 V3 SE); used by recover/addon
     "z_home_margin": 12,     # mm kept clear around that point before a recover/add-on may use G28
+    "fridge_dir": "",        # Fridge link folder (status.json, requests.json, approvals.json); default ~/second_brain/inbox/printer  # privacy-ok
+    "fridge_notes_ssh": True, # on a pass verdict for a Fridge request: ssh rambo 'rambo notes done N ...' (Nina gets a ping)  # privacy-ok
     "park_y": 220,           # Y to park at on cancel (bed depth)
 }
 
@@ -132,6 +134,10 @@ class Config:
     def ideas(self):
         v = self.raw.get("ideas_file")
         return pathlib.Path(v).expanduser() if v else self.data.parent / "ideas.md"
+
+    @property
+    def fridge(self):
+        return self._path("P3D_FRIDGE", "fridge_dir", HOME / "second_brain/inbox/printer")  # privacy-ok
 
     @property
     def control_ips(self):

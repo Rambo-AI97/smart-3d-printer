@@ -24,7 +24,9 @@ FIELDS = ["date", "name", "status", "est_min", "actual_min", "grams", "filament"
           "max_nozzle", "min_nozzle", "avg_bed", "layers", "samples_file", "rating", "issues", "notes", "model",
           # added 2026-11-09: spool + settings snapshot per job (for p3d stats / the dashboard settings timeline)
           "spool", "grams_used", "nozzle_first", "bed_first", "bed_other", "inner_speed", "travel_speed", "walls", "infill",
-          "infill_pattern", "profile_hash"]
+          "infill_pattern", "profile_hash",
+          # added 2026-11-25: print tracker (see tracker.py). state: check|passed|failed|cancelled|reopened; old rows leave these empty
+          "state", "reprint_of", "request", "who", "verdict", "verdict_date", "verdict_tags", "verdict_note"]
 ISSUES = ["stringing", "adhesion", "warping", "layer-shift", "blobs", "under-extrusion", "over-extrusion",
           "supports", "first-layer", "spaghetti", "other"]
 PRINTED = ("done", "failed", "cancelled")
@@ -143,7 +145,34 @@ def log_job(gcode, status, actual_min, source="p3d", extra=None):
     except Exception:
         pass
     row.update(extra or {})
+    try:
+        from . import tracker
+        row.update(tracker.new_row_fields(gcode, status, row))
+    except Exception:
+        pass
     append(row)
+    try:
+        from . import fridge
+        fridge.on_job_logged(row)
+    except Exception:
+        pass
+
+
+def row_key(r):
+    return (r.get("date"), r.get("name"), r.get("file"))
+
+
+def update_row(row, **kw):
+    """Set columns on the log row that matches row (date, name, file). Returns the updated row or None."""
+    migrate()
+    all_rows, hit = rows(), None
+    for r in all_rows:
+        if row_key(r) == row_key(row):
+            r.update({k: v for k, v in kw.items()})
+            hit = r
+    if hit:
+        write_all(all_rows)
+    return hit
 
 
 def printed_rows():
@@ -181,6 +210,12 @@ def cmd_rate(rating=None, issues=None, note=None, job=None):
                 r["notes"] = note
             last = r
     write_all(all_rows)
+    if rating is not None:
+        try:
+            from . import tracker
+            tracker.rating_verdict(last, rating)
+        except SystemExit:
+            pass
     print(f"rated {last['name']}: rating={last.get('rating') or '-'} issues={last.get('issues') or '-'} notes={last.get('notes') or '-'}")
     from . import insights
     for t, step in insights.next_steps([x for x in (last.get("issues") or "").split(",") if x]):

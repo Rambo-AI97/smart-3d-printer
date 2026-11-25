@@ -2,8 +2,8 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Printer</title>
 <style>
-:root{--bg:#0f1115;--card:#181b22;--line:#262a33;--fg:#e8eaf0;--mute:#8b92a1;--acc:#4ea1ff;--ok:#3ecf8e;--warn:#f5a524;--bad:#ef5350;--noz:#ff7a45;--bed:#4ea1ff;--accbg:#12304f;--okbg:#10381f;--warnbg:#3d2d0a;--badbg:#40181a;--pvbg:#1f2126}
-@media(prefers-color-scheme:light){:root{--bg:#f4f5f8;--card:#fff;--line:#dfe2ea;--fg:#1b1e26;--mute:#5d6577;--acc:#1f6fd1;--ok:#14935a;--warn:#b86e00;--bad:#d03a37;--noz:#d9541e;--bed:#1f6fd1;--accbg:#dbe9fb;--okbg:#d8f3e5;--warnbg:#fbeccd;--badbg:#fbdcdc;--pvbg:#e9ebf0}}
+:root{--bg:#0f0d14;--glass:rgba(34,29,46,.42);--glass2:rgba(48,41,62,.5);--edge:rgba(255,245,238,.16);--edge2:rgba(255,245,238,.28);--text:#e9e1d8;--muted:#a99fb0;--accent:#c9b6e4;--accent-soft:rgba(201,182,228,.18);--gold:#f0d58c;--mint:#9fd8b4;--sky:#9cc6ec;--rose:#e8909c;
+--card:var(--glass);--line:var(--edge);--fg:var(--text);--mute:var(--muted);--acc:var(--accent);--ok:var(--mint);--warn:var(--gold);--bad:var(--rose);--noz:#f0a07a;--bed:var(--sky);--accbg:var(--accent-soft);--okbg:rgba(159,216,180,.16);--warnbg:rgba(240,213,140,.16);--badbg:rgba(232,144,156,.16);--skybg:rgba(156,198,236,.16);--pvbg:rgba(255,245,238,.06)}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.4 system-ui,sans-serif}
 main{max-width:980px;margin:0 auto;padding:16px;display:grid;gap:14px}
 h1{font-size:20px;margin:0;font-weight:600;display:flex;justify-content:space-between;align-items:center}
@@ -64,12 +64,66 @@ input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--l
 #lb .row{justify-content:space-between;align-items:center;margin-top:8px}
 button.act.del{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
 textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:10px;font:13px/1.45 ui-monospace,monospace}
+/* Fridge look: glass cards on a dusk gradient, pills, thin line icons */
+html{background:var(--bg)}
+body{background:radial-gradient(120% 60% at 10% -10%,rgba(201,182,228,.16),transparent 60%),radial-gradient(90% 50% at 100% 0%,rgba(240,213,140,.08),transparent 60%),var(--bg);background-attachment:fixed;min-height:100vh;color-scheme:dark}
+main{max-width:640px;padding:16px}
+@media(min-width:900px){main{max-width:980px}}
+.card{background:var(--glass);border:1px solid var(--edge);border-radius:20px;-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.ic{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none;vertical-align:-4px}
+h1{gap:10px}h1 .t{display:flex;align-items:center;gap:8px}h1 .ic{color:var(--accent);width:22px;height:22px}
+.tabs button,.sub button,button.act,.chips button{display:inline-flex;align-items:center;gap:6px}
+.tabs button{background:var(--glass);border-color:var(--edge);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+.tabs button.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent)}
+button.act{background:var(--accent-soft);border-color:var(--edge2);color:var(--text);border-radius:99px}
+button.act:hover:not(:disabled){border-color:var(--accent)}
+button.act.go{background:var(--okbg);color:var(--mint);border-color:rgba(159,216,180,.45)}
+button.act.bad,button.act.del{background:var(--badbg);color:var(--rose);border-color:rgba(232,144,156,.45)}
+select,input[type=text],input[type=number],textarea{background:rgba(15,13,20,.5);border-color:var(--edge);border-radius:12px}
+.pc{background:var(--glass2);border-color:var(--edge);border-radius:16px}
+.pc.head{border-color:var(--accent)}
+dialog{background:#1b1724;border-color:var(--edge2);border-radius:20px}dialog::backdrop{background:rgba(8,6,12,.6)}
+td,th{border-bottom-color:var(--edge)}
+.badge{background:var(--glass2);border:1px solid var(--edge)}
+.badge.printing,.badge.queued{background:var(--skybg);color:var(--sky);border-color:rgba(156,198,236,.4)}
+.badge.paused,.badge.cancelled{background:var(--warnbg);color:var(--gold)}
+.badge.done{background:var(--okbg);color:var(--mint)}.badge.failed{background:var(--badbg);color:var(--rose)}
+#ctl{background:rgba(26,22,36,.7)}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:2px 11px;border-radius:99px;font-size:12px;font-weight:600;letter-spacing:.03em;border:1px solid var(--edge);background:var(--glass2);color:var(--muted);white-space:nowrap}
+.pill.printing{background:var(--skybg);color:var(--sky);border-color:rgba(156,198,236,.45)}
+.pill.check,.pill.change_asked{background:var(--warnbg);color:var(--gold);border-color:rgba(240,213,140,.45)}
+.pill.passed{background:var(--okbg);color:var(--mint);border-color:rgba(159,216,180,.45)}
+.pill.failed{background:var(--badbg);color:var(--rose);border-color:rgba(232,144,156,.45)}
+.pill.queued,.pill.reopened,.pill.awaiting_ok,.pill.approved{background:var(--accent-soft);color:var(--accent);border-color:rgba(201,182,228,.4)}
+.tk{display:grid;gap:10px;margin-top:10px}
+.tk .it{border:1px solid var(--edge);border-radius:16px;padding:12px;background:var(--glass2);display:grid;gap:6px}
+.tk .it .hd{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}.tk .it .nm{font-weight:600;word-break:break-word}
+.tk .it .mt{font-size:13px;color:var(--muted)}.tk .it .btns{display:flex;gap:8px;flex-wrap:wrap}.tk .it .btns button.act{margin:0;padding:6px 14px}
+.tk .it img{width:84px;height:84px;object-fit:cover;border-radius:12px;background:var(--pvbg)}.tk .it.rq{grid-template-columns:84px 1fr;align-items:start}
+.chain{display:flex;gap:6px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted)}
+/* embed: inside an iframe in the Fridge */
+body.embed{background:transparent}body.embed h1{display:none}body.embed main{padding:8px;max-width:none}
+body.embed .card{border-color:rgba(255,245,238,.08)}body.embed #ctl{position:static}
 </style></head><body><main>
-<h1>Printer <span id="upd">connecting...</span></h1>
-<div class="tabs"><button id="tg-live" class="on" onclick="tab('live')">Live</button><button id="tg-prints" onclick="tab(LASTSUB.prints)">Prints</button><button id="tg-charts" onclick="tab(LASTSUB.charts)">Stats</button><button id="tg-notes" onclick="tab(LASTSUB.notes)">Notes</button></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-printer" viewBox="0 0 24 24"><path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1h-2M7 14h10v6H7z"/></symbol>
+<symbol id="i-live" viewBox="0 0 24 24"><path d="M3 12h4l3-7 4 14 3-7h4"/></symbol>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5zM3 13l9 5 9-5"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20V4M4 20h16M8 16v-5M12 16V8M16 16v-3"/></symbol>
+<symbol id="i-note" viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 3 3 5-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13 6 5h12l2 8M4 13v6h16v-6M4 13h5l1 2h4l1-2h5"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+<symbol id="i-redo" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5"/></symbol>
+</defs></svg>
+<h1><span class="t"><svg class="ic"><use href="#i-printer"/></svg>Printer</span> <span id="upd">connecting...</span></h1>
+<div class="tabs"><button id="tg-live" class="on" onclick="tab('live')"><svg class="ic"><use href="#i-live"/></svg>Live</button><button id="tg-prints" onclick="tab(LASTSUB.prints)"><svg class="ic"><use href="#i-layers"/></svg>Prints</button><button id="tg-tracker" onclick="tab(LASTSUB.tracker)"><svg class="ic"><use href="#i-check"/></svg>Tracker</button><button id="tg-charts" onclick="tab(LASTSUB.charts)"><svg class="ic"><use href="#i-chart"/></svg>Stats</button><button id="tg-notes" onclick="tab(LASTSUB.notes)"><svg class="ic"><use href="#i-note"/></svg>Notes</button></div>
 <div class="sub hide" id="sub"></div>
 <section class="card" id="ctl"><div class="row">
-<button class="act" id="c-pause" onclick="ctl('/api/pause')">Pause</button><button class="act" id="c-resume" onclick="ctl('/api/resume')">Resume</button>
+<button class="act" id="c-pause" onclick="ctl('/api/pause')"><svg class="ic"><use href="#i-pause"/></svg>Pause</button><button class="act" id="c-resume" onclick="ctl('/api/resume')"><svg class="ic"><use href="#i-play"/></svg>Resume</button>
 <button class="act bad" id="c-stop" onclick="if(confirm('Stop the print? Heaters off, head lifts and parks. This cannot be resumed.'))ctl('/api/cancel')">Stop</button>
 <button class="act go" id="c-next" onclick="if(confirm('Start the next queued print? The bed must be clear.'))ctl('/api/queue/next')">Start next</button>
 <button class="act" id="c-retry" onclick="if(confirm('Reprint '+(CT.retry_name||'the last job')+'? The bed must be clear.'))ctl('/api/retry')">Retry last print</button>
@@ -87,7 +141,7 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
     <div class="name" id="name">No active job</div>
     <div class="msg" id="jobid"></div>
     <div class="prog">
-      <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" style="color:var(--line)" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="#4ea1ff" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
+      <div class="ring"><svg width="120" height="120" viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" fill="none" stroke="currentColor" style="color:var(--line)" stroke-width="10"/><circle id="arc" cx="60" cy="60" r="52" fill="none" stroke="var(--acc)" stroke-width="10" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="326.7"/></svg><b id="pct">–</b></div>
       <div class="stats">
         <div><span>Time left</span><b id="left">–</b></div><div><span>Done at</span><b id="eta">–</b></div>
         <div><span>Elapsed</span><b id="el">–</b></div><div><span>Est. total</span><b id="tot">–</b></div>
@@ -112,15 +166,15 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <div id="hist" class="hide">
 <section class="card"><div class="lab">Printer lifetime</div><div id="life" style="margin-top:6px">–</div></section>
 <div class="grid2">
-<section class="card"><div class="lab">Prints per week</div><canvas class="cv" id="c-weeks"></canvas><div class="leg"><i style="background:#3ecf8e"></i>done<i style="background:#f5a524"></i>cancelled<i style="background:#ef5350"></i>failed</div></section>
+<section class="card"><div class="lab">Prints per week</div><canvas class="cv" id="c-weeks"></canvas><div class="leg"><i style="background:var(--ok)"></i>done<i style="background:var(--warn)"></i>cancelled<i style="background:var(--bad)"></i>failed</div></section>
 <section class="card"><div class="lab">Filament per week (g)</div><canvas class="cv" id="c-grams"></canvas></section>
 <section class="card"><div class="lab">Estimated vs actual minutes</div><canvas class="cv" id="c-est"></canvas><div class="leg">on the line = slicer was right; above = took longer</div></section>
 <section class="card"><div class="lab">Rating over time</div><canvas class="cv" id="c-rate"></canvas></section>
-<section class="card"><div class="lab">Bed mesh span (mm)</div><canvas class="cv" id="c-mesh"></canvas><div class="leg"><i style="background:#3ecf8e"></i>0.30 good<i style="background:#f5a524"></i>0.60 usable</div></section>
+<section class="card"><div class="lab">Bed mesh span (mm)</div><canvas class="cv" id="c-mesh"></canvas><div class="leg"><i style="background:var(--ok)"></i>0.30 good<i style="background:var(--warn)"></i>0.60 usable</div></section>
 <section class="card"><div class="lab">Issues by tag</div><canvas class="cv" id="c-issues"></canvas></section>
 </div>
 <section class="card"><div class="lab">Job curve (tap a job)</div><div class="chips" id="jobs"></div><canvas class="cv" id="c-job" style="height:230px"></canvas>
-<div class="leg"><i style="background:#ff7a45"></i>nozzle<i style="background:#4ea1ff"></i>bed<i style="background:#3ecf8e"></i>progress % (right axis)</div><div class="leg" id="jobinfo"></div></section>
+<div class="leg"><i style="background:var(--noz)"></i>nozzle<i style="background:var(--acc)"></i>bed<i style="background:var(--ok)"></i>progress % (right axis)</div><div class="leg" id="jobinfo"></div></section>
 <section class="card"><div class="lab">Calibration</div><div class="cal" id="cal" style="margin-top:8px"></div></section>
 </div>
 <div id="stats" class="hide">
@@ -158,6 +212,15 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <div id="ideas" class="hide">
 <section class="card"><div class="lab">Add an idea</div><div class="row" style="margin-top:8px"><input type="text" id="i-text" placeholder="print idea, #tags allowed"><select id="i-status"></select><button class="act" style="margin:0" onclick="addIdea()">Add</button></div><div class="msg" id="m-i"></div></section>
 <section class="card"><div class="lab">Ideas</div><div id="i-list" style="margin-top:6px">–</div></section>
+</div>
+<div id="tr" class="hide">
+<section class="card"><div class="lab">Print tracker: finished prints wait here for a pass or fail</div>
+<div class="row" style="margin-top:8px;align-items:center"><div class="chips" style="margin:0"><button id="tr-open" class="on" onclick="trMode('open')">Open</button><button id="tr-all" onclick="trMode('all')">All</button></div>
+<input type="text" id="tr-q" placeholder="search" oninput="trDraw()"></div>
+<div class="msg" id="m-tr"></div><div id="tr-list" class="tk">–</div></section>
+</div>
+<div id="rq" class="hide">
+<section class="card"><div class="lab">Print requests from the Fridge</div><div class="msg" id="m-rq"></div><div id="rq-list" class="tk">–</div></section>
 </div>
 </main>
 <dialog id="lb" onclick="if(event.target===this)this.close()"><img id="lb-img" alt=""><div class="row"><b id="lb-t" style="word-break:break-word"></b><button class="act" style="margin:0" onclick="$('lb').close()">Close</button></div></dialog>
@@ -224,14 +287,15 @@ async function logs(){try{const rows=await (await fetch('/api/log',{cache:'no-st
   $('log').innerHTML=rows.map(r=>`<tr><td>${(r.date||'').slice(5,16)}</td><td>${(r.name||'').replace(/[<>&]/g,'')}</td><td class="s-${r.status}">${r.status}</td><td>${r.actual_min||D}</td></tr>`).join('')||'<tr><td colspan=4>no prints yet</td></tr>'}catch(e){}}
 
 let curTab='live',histLoaded=0,H=null;
-const GROUPS={live:['live'],prints:['pq','pm','ph'],charts:['stats','hist'],notes:['ideas','kn']},
-  LABEL={pq:'Queue',pm:'Models',ph:'Past prints',stats:'Charts',hist:'History',ideas:'Ideas',kn:'Knowledge'},LASTSUB={prints:'pq',charts:'stats',notes:'ideas'};
+const GROUPS={live:['live'],prints:['pq','pm','ph'],tracker:['tr','rq'],charts:['stats','hist'],notes:['ideas','kn']},
+  LABEL={tr:'Tracker',rq:'Requests',pq:'Queue',pm:'Models',ph:'Past prints',stats:'Charts',hist:'History',ideas:'Ideas',kn:'Knowledge'},LASTSUB={tracker:'tr',prints:'pq',charts:'stats',notes:'ideas'},
+  ALIAS={queue:'pq',models:'pm',past:'ph',charts:'stats',history:'hist',knowledge:'kn',tracker:'tr',requests:'rq',prints:'pq',notes:'ideas',stats:'stats'};
 function tab(t){curTab=t;const grp=Object.keys(GROUPS).find(g=>GROUPS[g].includes(t))||'live';if(grp!=='live')LASTSUB[grp]=t;
   for(const g in GROUPS)$('tg-'+g).classList.toggle('on',g===grp);
-  for(const k of['live','hist','stats','ideas','pq','ph','pm','kn'])$(k).classList.toggle('hide',k!==t);
+  for(const k of['live','hist','stats','ideas','pq','ph','pm','kn','tr','rq'])$(k).classList.toggle('hide',k!==t);
   const sb=$('sub');sb.classList.toggle('hide',grp==='live');sb.innerHTML=grp==='live'?'':GROUPS[grp].map(k=>`<button class="${k===t?'on':''}" onclick="tab('${k}')">${LABEL[k]}</button>`).join('');
-  history.replaceState(null,'',t==='live'?location.pathname:'#'+t);
-  if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else if(t==='pm'){pmLoad()}else if(t==='kn'){knLoad()}else chart()}
+  history.replaceState(null,'',location.pathname+location.search+(t==='live'?'':'#'+t));
+  if(t==='tr'){trLoad()}else if(t==='rq'){rqLoad()}else if(t==='hist'){loadHist()}else if(t==='stats'){loadStats()}else if(t==='ideas'){loadIdeas()}else if(t==='pq'){pqLoad()}else if(t==='ph'){phLoad()}else if(t==='pm'){pmLoad()}else if(t==='kn'){knLoad()}else chart()}
 const COL={};let T={};
 function theme(){const cs=getComputedStyle(document.documentElement),g=k=>cs.getPropertyValue('--'+k).trim();
   Object.assign(T,{line:g('line'),mute:g('mute'),fg:g('fg')});Object.assign(COL,{done:g('ok'),cancelled:g('warn'),failed:g('bad'),acc:g('acc'),noz:g('noz')})}theme();
@@ -436,7 +500,7 @@ function lvlLive(t){const P=t.points||[];const xs=[...new Set(P.map(p=>Math.roun
   const g=[0,1,2,3].map(()=>[null,null,null,null]);let cur=null;
   P.forEach(p=>{const c=xs.indexOf(Math.round(p[0])),r=3-ys.indexOf(Math.round(p[1]));if(c<4&&r>=0){g[r][c]=p[2];cur=[r,c]}});
   const ph={heating:'Heating the bed',settle:'Settling',homing:'Homing',probing:'Probing',stopping:'Stopping'}[t.phase]||'Starting';
-  const bar=t.phase==='heating'&&t.target?'<div style="height:8px;border-radius:4px;background:var(--line);margin:4px 0;max-width:320px"><div style="height:8px;border-radius:4px;background:#ef5350;width:'+Math.min(100,100*t.bed/t.target).toFixed(0)+'%"></div></div>':'';
+  const bar=t.phase==='heating'&&t.target?'<div style="height:8px;border-radius:4px;background:var(--line);margin:4px 0;max-width:320px"><div style="height:8px;border-radius:4px;background:var(--bad);width:'+Math.min(100,100*t.bed/t.target).toFixed(0)+'%"></div></div>':'';
   lvlDraw(g,null,'','',null,cur);
   $('lvl-txt').innerHTML='<b>'+ph+'</b>: '+esc(t.msg||'')+esc(lvlEta(t))+bar+'<br>Each square fills in as the probe touches it (seen from the front, back row on top). The current point has a white outline. Stop bed check turns the heater off.'}
 function lvlDraw(grid,span,verdict,when,turns,cur){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');LVG=[grid,span,verdict,when,turns,cur];
@@ -445,7 +509,7 @@ function lvlPaint(grid,span,verdict,when,turns,cur){if($('lvl').classList.contai
   if(!$('lvl').classList.contains('col')){theme();const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
   const n=grid[0].length,cw=w/n,ch=h/grid.length;x.font='11px system-ui';x.textAlign='center';
   grid.forEach((row,i)=>row.forEach((v,j)=>{if(v==null){x.fillStyle='rgba(128,128,128,.25)';x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#888';x.fillText('waiting',j*cw+cw/2,i*ch+ch/2+4);return}
-    const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?'#3ecf8e':v>0?`rgba(239,83,80,${.35+.65*a})`:`rgba(78,161,255,${.35+.65*a})`;
+    const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?COL.done:v>0?`rgba(232,144,156,${.35+.65*a})`:`rgba(156,198,236,${.35+.65*a})`;
     x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#000';x.fillText((v>0?'+':'')+v.toFixed(2),j*cw+cw/2,i*ch+ch/2+4);
     if(cur&&cur[0]===i&&cur[1]===j){x.strokeStyle='#fff';x.lineWidth=3;x.strokeRect(j*cw+2.5,i*ch+2.5,cw-5,ch-5)}}))}
   if(cur!==undefined)return;
@@ -502,5 +566,31 @@ async function knSave(){const m=$('m-kn'),text=$('kn-ta').value;m.textContent='.
   try{const r=await fetch('/api/knowledge/save',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:KN.id,text:text})}),j=await r.json();
     m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok?j.ok+' (previous version kept as .bak)':j.error||'failed');
     if(j.ok){KN.text=text;knShow(false)}}catch(e){m.textContent='failed: '+e}}
-tick();ctlLoad();setInterval(ctlLoad,3000);logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);if(['hist','stats','ideas','pq','ph','pm','kn'].includes(location.hash.slice(1)))tab(location.hash.slice(1));setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
+/* ---- tracker + requests ---- */
+let TR=[],trMd='open';
+const OPENST=['queued','printing','check'];
+function trMode(m){trMd=m;$('tr-open').classList.toggle('on',m==='open');$('tr-all').classList.toggle('on',m==='all');trDraw()}
+async function trLoad(){try{TR=await (await fetch('/api/tracker',{cache:'no-store'})).json()}catch(e){$('m-tr').textContent='offline';return}trDraw()}
+function trDraw(){const w=($('tr-q').value||'').toLowerCase().trim(),
+  reprinted=new Set(TR.map(i=>i.reprint_of).filter(Boolean));
+  let l=TR.filter(i=>w?JSON.stringify(i).toLowerCase().includes(w):trMd==='all'||OPENST.includes(i.state)||((i.state==='failed'||i.state==='reopened')&&!reprinted.has(i.name)));
+  $('tr-list').innerHTML=l.map((i,n)=>{const ch=(i.chain||[]).map(c=>`<span class="pill ${c.state}">${esc(c.name)}</span>`).join(' &rsaquo; ');
+    const btns=i.state==='check'?`<div class="btns"><button class="act go" onclick="trVerdict(${TR.indexOf(i)},'pass')"><svg class="ic"><use href="#i-check"/></svg>Pass</button><button class="act bad" onclick="trVerdict(${TR.indexOf(i)},'fail')"><svg class="ic"><use href="#i-x"/></svg>Fail</button></div>`:'';
+    return `<div class="it"><div class="hd"><span class="nm">${esc(i.name)}</span><span class="pill ${i.state}">${i.state}${i.progress?' '+Math.round(i.progress)+'%':''}</span></div>
+    <div class="mt">${esc((i.date||'').slice(0,16))}${i.who?' · '+esc(i.who):''}${i.request?' · note #'+esc(i.request):''}${i.tags?' · '+esc(i.tags):''}</div>
+    ${i.note?`<div class="mt">${esc(i.note)}</div>`:''}${ch||i.reprint_of?`<div class="chain">${ch?ch+' &rsaquo; ':'reprint of '+esc(i.reprint_of)+' &rsaquo; '}<span class="pill ${i.state}">${esc(i.name)}</span></div>`:''}${btns}</div>`}).join('')||'<span class="msg">nothing here</span>'}
+async function trVerdict(n,v){const i=TR[n],m=$('m-tr');let tags='',note='';
+  if(v==='fail'){const t=prompt('What went wrong? Tags, comma separated (warping, stringing, adhesion, layer-shift, blobs, supports, other)','');if(t===null)return;tags=t;const nt=prompt('Note (optional)','');if(nt===null)return;note=nt}
+  else if(!confirm('Mark '+i.name+' as passed?'))return;
+  m.textContent='...';
+  try{const r=await fetch('/api/verdict',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({job:i.job,verdict:v,tags:tags,note:note})}),j=await r.json();
+    m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'failed');trLoad()}catch(e){m.textContent='failed: '+e}}
+async function rqLoad(){let l;try{l=await (await fetch('/api/requests',{cache:'no-store'})).json()}catch(e){$('m-rq').textContent='offline';return}
+  $('rq-list').innerHTML=l.slice().reverse().map(q=>`<div class="it rq">${q.shot?`<img src="/api/request/shot/${encodeURIComponent(q.shot)}" alt="" onclick="zoom(this.src,'${esc(q.title)}')">`:'<div></div>'}
+    <div style="display:grid;gap:6px"><div class="hd"><span class="nm">${esc(q.title)}</span><span class="pill ${q.state}">${q.state.replace('_',' ')}</span></div>
+    <div class="mt">note #${esc(q.note)}${q.who?' · '+esc(q.who):''}${q.time?' · '+fmtMin(q.time):''}${q.grams?' · '+q.grams+' g':''}</div>
+    ${q.change_text?`<div class="mt">asked for a change: ${esc(q.change_text)}</div>`:''}${q.error?`<div class="mt">${esc(q.error)}</div>`:''}</div></div>`).join('')||'<span class="msg">no requests yet</span>'}
+tick();ctlLoad();setInterval(ctlLoad,3000);logs();queueLoad();setInterval(queueLoad,10000);setInterval(()=>{if(curTab==='pq')pqLoad()},10000);setInterval(tick,3000);{const qs=new URLSearchParams(location.search);if(qs.get('embed')==='1')document.body.classList.add('embed');
+const want=(qs.get('tab')||location.hash.slice(1)).toLowerCase(),id=ALIAS[want]||want;if(['hist','stats','ideas','pq','ph','pm','kn','tr','rq'].includes(id))tab(id)}
+setInterval(()=>{if(curTab==='tr')trLoad();if(curTab==='rq')rqLoad()},10000);setInterval(logs,30000);addEventListener('resize',()=>{if(curTab==='live')chart()});
 </script></body></html>

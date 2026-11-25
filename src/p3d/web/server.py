@@ -4,7 +4,7 @@ allowed from localhost and config `cancel_from` / `control_from` IPs only."""
 import csv, datetime, json, os, pathlib, re, subprocess, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import config, ideas, insights, pause, printlog, runner, spools
+from .. import config, fridge, ideas, insights, pause, printlog, runner, spools, tracker
 
 PAGE = pathlib.Path(__file__).resolve().parent / "index.html"
 DATA = config.get().data
@@ -1137,6 +1137,16 @@ class H(BaseHTTPRequestHandler):
                 self.reply({"error": str(e)}, 404)
         elif path == "/api/log":
             self.send(json.dumps(log_rows()).encode(), "application/json")
+        elif path == "/api/tracker":
+            self.send(json.dumps(tracker.items()).encode(), "application/json")
+        elif path == "/api/requests":
+            self.send(json.dumps(fridge.load_requests()).encode(), "application/json")
+        elif path.startswith("/api/request/shot/"):
+            f = config.get().fridge / "shots" / pathlib.Path(path[len("/api/request/shot/"):]).name  # basename only
+            if f.is_file():
+                self.send(f.read_bytes(), "image/jpeg")
+            else:
+                self.send(b"not found", "text/plain", 404)
         else:
             self.send(b"not found", "text/plain", 404)
 
@@ -1152,7 +1162,7 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         path = self.path.split("?")[0]
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
-                        "/api/queue/move",
+                        "/api/queue/move", "/api/verdict",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
                         "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool", "/api/upload", "/api/upload/link"):
             return self.send(b"not found", "text/plain", 404)
@@ -1233,6 +1243,15 @@ class H(BaseHTTPRequestHandler):
                     return self.reply({"ok": "started", "task": level_start(show=path.endswith("show"))}, 202)
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
+            if path == "/api/verdict":
+                b = self.body()
+                if b.get("verdict") not in ("pass", "fail"):
+                    return self.reply({"error": "verdict: pass | fail"}, 400)
+                try:
+                    r = tracker.set_verdict(str(b.get("job") or "last"), b["verdict"], b.get("tags") or "", str(b.get("note") or ""))
+                except SystemExit as e:
+                    return self.reply({"error": str(e)}, 409)
+                return self.reply({"ok": f"{r['name']}: {r['state']}"})
             if path == "/api/queue/next":
                 try:
                     if level_running():
@@ -1290,6 +1309,7 @@ class H(BaseHTTPRequestHandler):
 
 def main(port=None, host=None):
     c = config.get()
+    fridge.start_loop()
     ThreadingHTTPServer((host or c.web_host, int(port or c.web_port)), H).serve_forever()
 
 
