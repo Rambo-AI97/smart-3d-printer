@@ -4,7 +4,7 @@ allowed from localhost and config `cancel_from` / `control_from` IPs only."""
 import csv, datetime, json, os, pathlib, re, subprocess, sys, threading, time, urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from .. import config, fridge, ideas, insights, pause, printlog, runner, spools, tracker
+from .. import config, fridge, ideas, insights, pause, printers, printlog, runner, spools, tracker
 
 PAGE = pathlib.Path(__file__).resolve().parent / "index.html"
 DATA = config.get().data
@@ -729,8 +729,24 @@ def level_running():
     return any(t["state"] == "running" and t.get("kind") == "level" for t in _TASKS.values())
 
 
+def printer_info():
+    """Printer type and what it can do (the page hides buttons whose cap is missing)."""
+    try:
+        t = printers.printer_type()
+        return {"type": t, "caps": printers.caps_for()}
+    except printers.BackendError:
+        return {"type": "marlin", "caps": printers.caps_for_type("marlin")}
+
+
+def cap_refusal(cap):
+    p = printer_info()
+    return "" if cap in p["caps"] else f"not available for {p['type']} printers (needs a USB Marlin connection)"
+
+
 def level_refusal():
     """Why a bed probe must not start now, or ''. The probe moves the printer and holds the serial port."""
+    if cap_refusal("level"):
+        return cap_refusal("level")
     if config.print_cancellable():
         return "a print is running or heating"
     if level_running():
@@ -823,6 +839,8 @@ def level_stop():
 
 def level_start(show=False, bed=70, run=None):
     """Bed probe (`p3d level --hot 70`, once, no adjust loop) or `--show`, as a background task. Raises Refuse."""
+    if cap_refusal("level"):
+        raise runner.Refuse(cap_refusal("level"))
     if not show:
         why = level_refusal()
         if why:
@@ -885,6 +903,8 @@ def level_last():
 
 
 def cooldown_start():
+    if cap_refusal("level"):   # the cooldown watcher talks USB serial
+        raise runner.Refuse(cap_refusal("level"))
     runner.start_unit("p3d-cooldown", ["--cooldown"])
     return "cooldown watcher started: after the print, heaters off, wait until cool, motors off"
 
@@ -915,8 +935,13 @@ def controls():
         why["level"] = lr
     if config.print_running():
         why["show"] = "the printer port is busy (print or cooldown running)"
+    if cap_refusal("level"):
+        why["show"] = why["level"] = why["cooldown"] = cap_refusal("level")
+    if cap_refusal("pause"):
+        why["pause"] = cap_refusal("pause")
     return {"status": st, "why": why, "retry_name": (last or {}).get("name", ""),
-            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl, "lstop": lvl,
+            **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl and "cooldown" not in why, "lstop": lvl,
+            "printer": printer_info(),
             "spools": spool_list()}
 
 
@@ -1070,6 +1095,7 @@ class H(BaseHTTPRequestHandler):
                     pass
             s["server_time"] = time.strftime("%Y-%m-%dT%H:%M:%S")
             s["server_ts"] = time.time()
+            s["printer"] = printer_info()
             s["loaded_filament"] = loaded_filament()
             s["job_note"] = ""
             if s.get("job_dir"):  # queue note saved with the job (shows WHICH version is printing)

@@ -19,6 +19,7 @@ cad = ["build123d", "trimesh", "manifold3d", "shapely", "numpy", "scipy", "matpl
 bambu = ["paho-mqtt>=2"]
 all = ["p3d[cad]", "p3d[bambu]"]
 dev = ["pytest>=7", "ruff>=0.5"]
+bambu = ["paho-mqtt>=2"]
 
 [project.scripts]
 p3d = "p3d.cli:main"

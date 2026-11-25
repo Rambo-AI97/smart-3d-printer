@@ -5,6 +5,18 @@
 port = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
 baud = 115200
 
+# Printer type. "marlin" = USB serial (above). Network printers need printer_url instead of a USB port:
+#   klipper    Moonraker: Voron, Creality K1/K2/Ender-3 V3 KE, Sovol SV06+/SV07/SV08, Elegoo Neptune 4, Qidi, Kobra w/ Klipper
+#   octoprint  any printer behind OctoPrint (needs printer_api_key)
+#   prusalink  Prusa MK4/MK4S/MK3.9/XL/Mini/Core One (printer_api_key = PrusaLink key)
+#   bambu      Bambu Lab X1/P1/A1/H2D in LAN mode (needs a sliced .gcode.3mf; pip install 'p3d[bambu]')
+# Bed check, PID, probe, calibration prints and recover/add-on need the USB Marlin connection.
+printer_type = "marlin"
+printer_url = ""            # e.g. "http://voron.local:7125" (octoprint: "http://octopi.local", bambu: "bambu.local")
+printer_api_key = ""        # optional for Moonraker, required for OctoPrint and PrusaLink
+bambu_serial = ""           # Bambu: serial number (printer screen > device info)
+bambu_access_code = ""      # Bambu: LAN access code (printer screen > network)
+
 # Tools. Empty = search PATH, ~/orca-slicer, ~/Applications/*OrcaSlicer*.AppImage.
 orca_slicer = ""
 openscad = ""

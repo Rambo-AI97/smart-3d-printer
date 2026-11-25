@@ -36,7 +36,16 @@ def cmd_status(a):
               (f"  error: {s['error']}" if s.get("error") else ""))
     if s.get("nozzle") is not None:
         print(f"  nozzle {s.get('nozzle')}/{s.get('nozzle_target')} C  bed {s.get('bed')}/{s.get('bed_target')} C")
-    if not run:
+    if not run and str(cfg().printer_type or "marlin").lower() != "marlin":
+        from . import printers
+        try:
+            b = printers.get_backend()
+            now = b.status()
+            b.close()
+            print(f"  printer now: {now['state']}, nozzle {now['nozzle']}/{now['nozzle_target']} C, bed {now['bed']}/{now['bed_target']} C")
+        except Exception as e:
+            print("  printer not reachable:", e)
+    elif not run:
         config.reexec_with_dialout()
         try:
             with config.open_serial() as ser:
@@ -96,12 +105,19 @@ def cmd_idea(a):
     ideas.cmd(a)
 
 
+def _need_cap(cap):
+    from . import printers
+    printers.require(cap)
+
+
 def cmd_recover(a):
+    _need_cap("recover")
     from . import recover
     recover.cmd_recover(a)
 
 
 def cmd_addon(a):
+    _need_cap("recover")
     from . import recover
     recover.cmd_addon(a)
 
@@ -463,12 +479,14 @@ def _idle_port():
 
 
 def cmd_level(a):
+    _need_cap("level")
     _idle_port()
     from . import level
     level.main(a.show, a.hot, a.soak, a.adjust)
 
 
 def cmd_calib(a):
+    _need_cap("calib")
     _need("Orca Slicer", cfg().orca)
     _need("OpenSCAD", cfg().scad)
     from . import calib
@@ -476,12 +494,14 @@ def cmd_calib(a):
 
 
 def cmd_pid(a):
+    _need_cap("pid")
     _idle_port()
     from . import pid
     pid.main(a.hotend, a.bed)
 
 
 def cmd_probe(_):
+    _need_cap("probe")
     _idle_port()
     from . import probe
     probe.main()

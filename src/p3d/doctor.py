@@ -23,8 +23,18 @@ def checks():
     except ImportError:
         yield FAIL, "pyserial", "missing -> reinstall p3d (pipx install --force ...)"
 
+    ptype = str(c.printer_type or "marlin").lower()
     port = c.port
-    if not port:
+    if ptype != "marlin":
+        from . import printers
+        try:
+            b = printers.get_backend(c)
+            b.ping()
+            b.close()
+            yield OK, "printer", f"{ptype} printer answers ({c.printer_url or 'bambu LAN'})"
+        except printers.BackendError as e:
+            yield FAIL, "printer", f"{e} -> check printer_url / printer_api_key / power and network"
+    elif not port:
         yield FAIL, "printer port", "no USB serial device -> plug in the printer, power it on, check the cable"
     elif not os.path.exists(port):
         yield FAIL, "printer port", f"{port} not present -> printer off/unplugged, or wrong `port` in the config"
