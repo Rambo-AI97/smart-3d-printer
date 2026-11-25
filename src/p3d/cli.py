@@ -648,7 +648,7 @@ COMMANDS = {
          [A("name"), QUAL, FIL, A("--supports", action="store_true"),
           A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
           A("--walls", type=int), A("--infill", type=int),
-          A("--orient", action="store_true", help="let the slicer auto-rotate")]),
+          A("--orient", action="store_true", help="let the slicer auto-rotate"), *MAKE_ARGS]),
         ("shot", cmd_shot, "small labelled JPG of job previews (to send to a phone)",
          [A("items", nargs="+", help="job dirs, gcode, stl/scad or png"), A("-o", "--out")]),
         ("model", cmd_model, "any .glb/.obj/.fbx/.stl -> solid printable STL (Blender)",

@@ -50,7 +50,9 @@ def cmd_build(a):
     if not src.exists():
         sys.exit(f"no {src}")
     print(_run_cad("p3d.shapes.build", src))
-    a.model, a.keep_orient = str(src.with_suffix(".stl")), not a.orient
+    from .eng.commands import gate
+    stl = gate(src.with_suffix(".stl"), a)   # same pre-slice check as make
+    a.model, a.keep_orient = str(stl), not a.orient
     final = cli.cmd_slice(a)
     from .shot import shot
     print("shot:", shot([pathlib.Path(final).parent]))
