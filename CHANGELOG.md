@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Dashboard: upload a model from the phone (`POST /api/upload?name=`, raw body; .stl .3mf .obj .zip, 100 MB cap) or paste a Printables link (`POST /api/upload/link`, public GraphQL API, STL files only). Safe unzip, 3MF/OBJ converted to STL in pure Python, sliced PETG/standard into a model card (never queued or printed). Bed-mesh panel is collapsible (remembered) and capped in height.
 - Slice advisor: `p3d inspect` prints an Advice section (brim for tall parts, supports, heavy settings on small parts, placement and bed mesh, filament vs spool, long prints). `p3d.advisor.advise(info)` for reuse.
   It also runs automatically after every `p3d slice`, `p3d queue add` and dashboard slice/reslice, so problems show before the preview (it caught a 50 mm part sliced without a brim on its first run).
 

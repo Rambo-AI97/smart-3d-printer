@@ -50,7 +50,7 @@ input[type=text]{flex:1;min-width:0}.row{display:flex;gap:8px;flex-wrap:wrap}.tl
 button.act.go{background:var(--okbg);color:var(--ok);border-color:var(--ok)}.fw{display:inline-block;padding:2px 10px;border-radius:99px;font-size:12px;font-weight:600;background:var(--warnbg);color:var(--warn);margin-top:4px}
 #upd{font-size:12px;color:var(--mute);font-weight:400}
 #ctl{position:sticky;top:0;z-index:5}#ctl .row{gap:0}button.act.bad{background:var(--badbg);color:var(--bad);border-color:var(--bad)}
-#ctl button.act{margin:4px 6px 0 0;padding:7px 12px}#ctl .spl{margin:4px 0 0 4px;display:flex;gap:6px;align-items:center;font-size:13px}#ctl select{padding:6px 8px;max-width:100%}#lvl{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:8px}#lvl canvas{width:260px;height:190px;margin:0}
+#ctl button.act{margin:4px 6px 0 0;padding:7px 12px}#ctl .spl{margin:4px 0 0 4px;display:flex;gap:6px;align-items:center;font-size:13px}#ctl select{padding:6px 8px;max-width:100%}#lvl{margin-top:8px;border-top:1px solid var(--line)}#lvl-hd{cursor:pointer;padding:8px 0;font-size:14px;font-weight:600;user-select:none}#lvl-hd span.s{font-weight:400;color:var(--mute)}#lvl-body{display:flex;gap:14px;align-items:center;flex-wrap:wrap;max-height:48vh;overflow:auto}#lvl.col #lvl-body{display:none}#lvl canvas{width:min(260px,100%);height:min(190px,26vh);margin:0}.upl input[type=file]{max-width:100%}.upl .row{margin-top:8px}
 dialog{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:14px;padding:16px;max-width:560px;width:calc(100% - 24px)}dialog::backdrop{background:#0009}
 .fm{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px 12px;margin-top:10px}.fm label{font-size:12px;color:var(--mute);display:grid;gap:3px}.fm label.ck{display:flex;gap:6px;align-items:center;color:var(--fg);font-size:14px}
 input[type=number]{background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:inherit;font-size:14px;width:100%}
@@ -78,7 +78,7 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <button class="act hide" id="c-lstop" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="if(confirm('Stop the bed check? The bed heater goes off.'))ctl('/api/level/stop')">Stop bed check</button>
 <button class="act" id="c-cool" onclick="ctl('/api/cooldown')">Cooldown</button>
 <label class="spl" title="The loaded spool decides the filament used for slicing and the queue spool check">Loaded filament <select id="c-spool" onchange="spoolPick(this)"></select></label></div>
-<div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></section>
+<div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide col"><div id="lvl-hd" onclick="lvlTog()"><span id="lvl-ar">&#9656;</span> Bed mesh <span class="s" id="lvl-sum"></span></div><div id="lvl-body"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></div></section>
 <div id="live">
 <section class="card hero">
   <img id="pv" alt="model preview" style="visibility:hidden" onclick="zoom(this.src,$('name').textContent)">
@@ -134,12 +134,20 @@ textarea#kn-ta{width:100%;min-height:55vh;background:var(--bg);color:var(--fg);b
 <section class="card"><div class="lab">Settings changes (dashed line = settings changed before that job)</div><canvas class="cv" id="s-tl" style="height:150px"></canvas><div class="leg"><i style="background:var(--ok)"></i>done<i style="background:var(--warn)"></i>cancelled<i style="background:var(--bad)"></i>failed</div><div id="s-chg" class="tl"></div><div id="s-rec" class="tl"></div></section>
 </div>
 <div id="pq" class="hide">
+<section class="card upl"><div class="lab">Add a print from this phone (never starts or queues by itself)</div>
+<div class="row"><input type="file" id="up-f-pq" accept=".stl,.3mf,.obj,.step,.stp,.zip"><button class="act go" style="margin:0" onclick="upFile('pq')">Upload &amp; slice</button></div>
+<div class="row"><input type="text" id="up-l-pq" placeholder="or paste a Printables model link"><button class="act" style="margin:0" onclick="upLink('pq')">Fetch</button></div>
+<div class="msg" id="up-m-pq">.stl .3mf .obj .zip up to 100 MB. It is sliced with PETG / standard; check the card in Models, then add it to the queue.</div></section>
 <section class="card"><div class="lab">Print queue: runs top to bottom</div><div class="msg" id="pq-fil"></div><div class="msg" id="m-pq"></div><div id="pq-list" class="pcards">–</div></section>
 </div>
 <div id="ph" class="hide">
 <section class="card"><div class="lab">Past prints (newest 50)</div><div class="msg" id="m-ph"></div><div id="ph-list" class="pcards">–</div></section>
 </div>
 <div id="pm" class="hide">
+<section class="card upl"><div class="lab">Add a print from this phone (never starts or queues by itself)</div>
+<div class="row"><input type="file" id="up-f-pm" accept=".stl,.3mf,.obj,.step,.stp,.zip"><button class="act go" style="margin:0" onclick="upFile('pm')">Upload &amp; slice</button></div>
+<div class="row"><input type="text" id="up-l-pm" placeholder="or paste a Printables model link"><button class="act" style="margin:0" onclick="upLink('pm')">Fetch</button></div>
+<div class="msg" id="up-m-pm">.stl .3mf .obj .zip up to 100 MB. It is sliced with PETG / standard; check the card in Models, then add it to the queue.</div></section>
 <section class="card"><div class="lab">Models: slice with the loaded filament and add to the queue (never starts a print)</div><div class="msg" id="pm-fil"></div><div class="msg" id="m-pm"></div><div id="pm-list" class="pcards">–</div></section>
 </div>
 <div id="kn" class="hide">
@@ -322,7 +330,7 @@ async function pmLoad(){let m;try{m=await (await fetch('/api/models',{cache:'no-
   $('pm-list').innerHTML=m.map(e=>{const t=TASK[e.id]||{};const id=encodeURIComponent(e.id);
     return `<div class="pc">${e.picture?`<img loading="lazy" src="/api/model.png?id=${id}" alt="" onclick="zoom(this.src,'${encodeURIComponent(e.name)}')">`:'<div class="ph">no picture</div>'}<div>
     <div class="t">${esc(e.name)}</div><div class="m">${[esc(e.date||''),esc(e.folder||'models')].filter(Boolean).join(' · ')}</div>
-    <div class="m" id="t-${id}">${esc(t.msg||'')}</div>
+    <div class="m" id="t-${id}">${esc(t.msg||e.info||'')}</div>
     <div class="btns"><button class="act go" ${t.state==='running'||!LOADED.material?'disabled':''} onclick="mSlice('${id}')">Slice &amp; add to queue</button><button class="act" onclick="openReslice('model','${id}')">Reslice...</button><button class="act del" onclick="mDelete('${id}')">Delete</button></div></div></div>`}).join('')||'No models found.'}
 async function mDelete(id){const mid=decodeURIComponent(id),n=mid.split('/').pop().replace(/\.stl$/i,'');
   if(!confirm('Delete the model "'+n+'"?\n\nIt disappears from this list (moved to models/.trash, so it can still be recovered).'))return;
@@ -334,6 +342,23 @@ async function mSlice(id){const mid=decodeURIComponent(id),m=$('m-pm');
 async function pollTask(tid,mid){try{const t=await (await fetch('/api/tasks/'+tid,{cache:'no-store'})).json();
   TASK[mid]=t.state==='running'?{state:'running',msg:'slicing...'}:{state:t.state,msg:t.state==='done'?t.msg:'failed: '+t.msg};
   if(curTab==='pm')pmLoad();if(t.state==='running')setTimeout(()=>pollTask(tid,mid),2000);else queueLoad()}catch(e){setTimeout(()=>pollTask(tid,mid),3000)}}
+// ---- upload from phone ----
+async function upFile(k){const f=$('up-f-'+k).files[0],m=$('up-m-'+k);if(!f){m.textContent='Choose a file first';return}
+  if(f.size>100*1048576){m.textContent='File is bigger than 100 MB';return}
+  m.textContent='Uploading '+f.name+'...';
+  try{const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',headers:{'Content-Type':'application/octet-stream'},body:f}),j=await r.json();
+    if(!j.task){m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.error||'failed');return}
+    upPoll(j.task,k)}catch(e){m.textContent='failed: '+e}}
+async function upLink(k){const u=$('up-l-'+k).value.trim(),m=$('up-m-'+k);if(!u){m.textContent='Paste a Printables link first';return}
+  m.textContent='Contacting Printables...';
+  try{const r=await fetch('/api/upload/link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url:u})}),j=await r.json();
+    if(!j.task){m.textContent=r.status===403?'Not allowed from this device':(j.error||'failed');return}
+    upPoll(j.task,k)}catch(e){m.textContent='failed: '+e}}
+async function upPoll(tid,k){const m=$('up-m-'+k);try{const t=await (await fetch('/api/tasks/'+tid,{cache:'no-store'})).json();
+  m.textContent=t.state==='error'?'Failed: '+t.msg:t.msg;
+  if(t.state==='running')setTimeout(()=>upPoll(tid,k),2000);
+  else if(t.state==='done'){queueLoad();if(curTab==='pm')pmLoad();m.innerHTML=esc(t.msg)+' <button class="act go" style="margin:0" onclick="tab(\'pm\')">Open Models</button>'}}
+  catch(e){setTimeout(()=>upPoll(tid,k),3000)}}
 // ---- stats ----
 let ST=null;
 function lines(id,labels,series){const g=cv(id);if(!labels.length)return empty(g,'no printed jobs yet');
@@ -382,7 +407,7 @@ async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-st
   spoolFill(CT.spools);
   const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
   $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg+(t.kind==='level'?lvlEta(t):'')).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');
-  const lr=run.find(t=>t.kind==='level'&&t.model==='bed check');if(lr){lvlLive(lr);lvlSeen=''}else LVS=[];
+  const lr=run.find(t=>t.kind==='level'&&t.model==='bed check');if(lr){LVRUN=true;lvlLive(lr);lvlSeen=''}else{LVS=[];if(LVRUN){LVRUN=false;lvlApply()}}
   if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now',lv.turns)}
   else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when,l.turns)}
   }catch(e){}}
@@ -403,6 +428,10 @@ let LVS=[];   // [time, bed C] samples while heating -> time left
 function lvlEta(t){if(t.phase==='heating'&&t.bed!=null){LVS.push([Date.now(),t.bed]);LVS=LVS.filter(x=>Date.now()-x[0]<60000);
     if(LVS.length>2){const a=LVS[0],b=LVS[LVS.length-1],r=(b[1]-a[1])/((b[0]-a[0])/1000);if(r>0.01){const s=Math.max(0,(t.target-t.bed)/r);return ' (about '+(s<90?Math.round(s)+' s':Math.round(s/60)+' min')+' left, then 16 probe points ~2 min)'}}return ' (working out time left...)'}
   if(t.phase==='probing')return ' (~'+Math.max(1,Math.round((16-(t.points||[]).length)*7/60))+' min left)';return ''}
+let LVRUN=false,LVG=null;
+function lvlCol(){try{return localStorage.getItem('lvlCol')!=='0'}catch(e){return true}}
+function lvlTog(){const c=!$('lvl').classList.contains('col');try{localStorage.setItem('lvlCol',c?'1':'0')}catch(e){}LVRUN=false;lvlApply(c)}
+function lvlApply(c){if(c===undefined)c=lvlCol();if(LVRUN)c=false;$('lvl').classList.toggle('col',c);$('lvl-ar').innerHTML=c?'&#9656;':'&#9662;';if(!c&&LVG)lvlPaint(...LVG)}
 function lvlLive(t){const P=t.points||[];const xs=[...new Set(P.map(p=>Math.round(p[0])))].sort((a,b)=>a-b),ys=[...new Set(P.map(p=>Math.round(p[1])))].sort((a,b)=>a-b);
   const g=[0,1,2,3].map(()=>[null,null,null,null]);let cur=null;
   P.forEach(p=>{const c=xs.indexOf(Math.round(p[0])),r=3-ys.indexOf(Math.round(p[1]));if(c<4&&r>=0){g[r][c]=p[2];cur=[r,c]}});
@@ -410,13 +439,15 @@ function lvlLive(t){const P=t.points||[];const xs=[...new Set(P.map(p=>Math.roun
   const bar=t.phase==='heating'&&t.target?'<div style="height:8px;border-radius:4px;background:var(--line);margin:4px 0;max-width:320px"><div style="height:8px;border-radius:4px;background:#ef5350;width:'+Math.min(100,100*t.bed/t.target).toFixed(0)+'%"></div></div>':'';
   lvlDraw(g,null,'','',null,cur);
   $('lvl-txt').innerHTML='<b>'+ph+'</b>: '+esc(t.msg||'')+esc(lvlEta(t))+bar+'<br>Each square fills in as the probe touches it (seen from the front, back row on top). The current point has a white outline. Stop bed check turns the heater off.'}
-function lvlDraw(grid,span,verdict,when,turns,cur){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');theme();
-  const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
+function lvlDraw(grid,span,verdict,when,turns,cur){if(!grid||!grid.length)return;$('lvl').classList.remove('hide');LVG=[grid,span,verdict,when,turns,cur];
+  $('lvl-sum').textContent=cur!==undefined?'(check running)':(span==null?'':'span '+span.toFixed(2)+' mm '+(verdict||''));lvlApply(lvlCol()&&!LVRUN);lvlPaint(...LVG)}
+function lvlPaint(grid,span,verdict,when,turns,cur){if($('lvl').classList.contains('col')&&cur===undefined)return;
+  if(!$('lvl').classList.contains('col')){theme();const c=$('lvl-cv'),r=devicePixelRatio||1,w=c.clientWidth,h=c.clientHeight;c.width=w*r;c.height=h*r;const x=c.getContext('2d');x.scale(r,r);
   const n=grid[0].length,cw=w/n,ch=h/grid.length;x.font='11px system-ui';x.textAlign='center';
   grid.forEach((row,i)=>row.forEach((v,j)=>{if(v==null){x.fillStyle='rgba(128,128,128,.25)';x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#888';x.fillText('waiting',j*cw+cw/2,i*ch+ch/2+4);return}
     const a=Math.min(1,Math.abs(v)/0.4);x.fillStyle=Math.abs(v)<0.1?'#3ecf8e':v>0?`rgba(239,83,80,${.35+.65*a})`:`rgba(78,161,255,${.35+.65*a})`;
     x.fillRect(j*cw+1,i*ch+1,cw-2,ch-2);x.fillStyle='#000';x.fillText((v>0?'+':'')+v.toFixed(2),j*cw+cw/2,i*ch+ch/2+4);
-    if(cur&&cur[0]===i&&cur[1]===j){x.strokeStyle='#fff';x.lineWidth=3;x.strokeRect(j*cw+2.5,i*ch+2.5,cw-5,ch-5)}}));
+    if(cur&&cur[0]===i&&cur[1]===j){x.strokeStyle='#fff';x.lineWidth=3;x.strokeRect(j*cw+2.5,i*ch+2.5,cw-5,ch-5)}}))}
   if(cur!==undefined)return;
   $('lvl-txt').innerHTML='Bed mesh ('+esc(when||'')+'): span <b>'+(span==null?D:span.toFixed(2))+' mm</b> '+esc(verdict||'')+'<br>Seen from the front: back row on top. Red = bed high, blue = low, green = flat. Good under 0.30 mm, usable under 0.60.'
     +(turns&&turns.length?'<br><b>What to turn</b> (Allen key from the top: &#8635; clockwise = corner down, &#8634; counter-clockwise = corner up):<br>'+turns.map(t=>esc(t.corner)+': <b>'+(t.action==='leave it'?'':/COUNTER/.test(t.action)?'<span style="font-size:1.3em">&#8634;</span> ':'<span style="font-size:1.3em">&#8635;</span> ')+esc(t.action)+'</b>'+(t.action==='leave it'?'':' ('+(t.mm>0?'too high':'too low')+' by '+Math.abs(t.mm).toFixed(2)+' mm)')).join('<br>')+'<br>Then press Check bed level again.':'')}

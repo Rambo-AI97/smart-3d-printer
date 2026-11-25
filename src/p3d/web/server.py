@@ -241,6 +241,13 @@ def models_dir():
     return pathlib.Path(os.environ.get("P3D_MODELS_LIB") or pathlib.Path(__file__).resolve().parents[3] / "models")
 
 
+def _slice_info(stl):
+    try:
+        return json.loads(stl.with_suffix(".slice.json").read_text()).get("msg", "")
+    except Exception:
+        return ""
+
+
 def model_list():
     """Printable library, newest first: every *.stl under models/ (id = path relative to it), with the sibling .png
     if present. Hidden folders (.trash) are skipped."""
@@ -251,7 +258,7 @@ def model_list():
             continue
         mt = p.stat().st_mtime
         out.append({"id": rel.as_posix(), "name": p.stem, "folder": rel.parent.as_posix() if rel.parent.as_posix() != "." else "",
-                    "picture": p.with_suffix(".png").is_file(), "mtime": mt,
+                    "picture": p.with_suffix(".png").is_file(), "mtime": mt, "info": _slice_info(p),
                     "date": datetime.datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")})
     return sorted(out, key=lambda m: -m["mtime"])
 
@@ -471,6 +478,251 @@ def mins(m):
 # ---- controls bar: retry, bed level, cooldown ----
 
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
+# ---- uploads from the phone / a Printables link (files are untrusted data: never executed, only parsed) ----
+UPLOAD_EXT = (".stl", ".3mf", ".obj", ".step", ".stp", ".zip")
+MAX_UPLOAD = 100 * 1024 * 1024
+MAX_UNPACKED = 300 * 1024 * 1024
+
+
+def _safe_name(n, default="model"):
+    n = re.sub(r"[^A-Za-z0-9._-]+", "_", pathlib.PurePosixPath(str(n).replace("\\", "/")).name).lstrip(".")
+    return n[:80] or default
+
+
+def _stl_write(tris, out):
+    import struct
+    with open(out, "wb") as f:
+        f.write(b"p3d upload".ljust(80, b" ") + struct.pack("<I", len(tris)))
+        for a, b, c in tris:
+            f.write(struct.pack("<12fH", 0, 0, 0, *a, *b, *c, 0))
+
+
+def _obj_to_stl(src, out):
+    v, tris = [], []
+    with open(src, errors="replace") as f:
+        for line in f:
+            w = line.split()
+            if not w:
+                continue
+            if w[0] == "v" and len(w) >= 4:
+                v.append(tuple(float(x) for x in w[1:4]))
+            elif w[0] == "f" and len(w) >= 4:
+                ix = [int(x.split("/")[0]) for x in w[1:]]
+                ix = [i - 1 if i > 0 else len(v) + i for i in ix]
+                tris += [(v[ix[0]], v[ix[k]], v[ix[k + 1]]) for k in range(1, len(ix) - 1)]
+    if not tris:
+        raise runner.Refuse("no mesh found in the OBJ file")
+    _stl_write(tris, out)
+
+
+def _3mf_to_stl(src, out):
+    """3MF (zip + XML) -> binary STL: all build items, with transforms and component references. Entity-bearing XML is refused."""
+    import xml.etree.ElementTree as ET, zipfile
+    with zipfile.ZipFile(src) as z:
+        names = [n for n in z.namelist() if n.lower().endswith(".model")]
+        name = "3D/3dmodel.model" if "3D/3dmodel.model" in z.namelist() else (names[0] if names else None)
+        if not name or z.getinfo(name).file_size > MAX_UNPACKED:
+            raise runner.Refuse("no 3D model found in the 3MF file")
+        data = z.read(name)
+    if b"<!DOCTYPE" in data or b"<!ENTITY" in data:
+        raise runner.Refuse("refused: the 3MF contains XML entities")
+    tag = lambda e: e.tag.rsplit("}", 1)[-1]
+    objs, items = {}, []
+    for e in ET.fromstring(data).iter():
+        if tag(e) == "object":
+            o = {"v": [], "t": [], "c": []}
+            for m in e.iter():
+                if tag(m) == "vertex":
+                    o["v"].append((float(m.get("x")), float(m.get("y")), float(m.get("z"))))
+                elif tag(m) == "triangle":
+                    o["t"].append((int(m.get("v1")), int(m.get("v2")), int(m.get("v3"))))
+                elif tag(m) == "component" and not m.get("path"):
+                    o["c"].append((m.get("objectid"), m.get("transform")))
+            objs[e.get("id")] = o
+        elif tag(e) == "item":
+            items.append((e.get("objectid"), e.get("transform")))
+    if not items:
+        items = [(i, None) for i, o in objs.items() if o["t"]]
+
+    def mat(t):
+        return [float(x) for x in t.split()] if t and len(t.split()) == 12 else [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+
+    def mul(a, b):  # apply a then b (row vectors)
+        return [sum(a[r * 3 + k] * b[k * 3 + c] for k in range(3)) for r in range(3) for c in range(3)] + \
+               [sum(a[9 + k] * b[k * 3 + c] for k in range(3)) + b[9 + c] for c in range(3)]
+
+    tris = []
+
+    def walk(oid, m, depth=0):
+        o = objs.get(oid)
+        if not o or depth > 6:
+            return
+        pts = [tuple(sum(p[k] * m[k * 3 + c] for k in range(3)) + m[9 + c] for c in range(3)) for p in o["v"]]
+        tris.extend((pts[a], pts[b], pts[c]) for a, b, c in o["t"] if max(a, b, c) < len(pts))
+        for cid, ct in o["c"]:
+            walk(cid, mul(mat(ct), m), depth + 1)
+
+    for oid, t in items:
+        walk(oid, mat(t))
+    if not tris:
+        raise runner.Refuse("no mesh found in the 3MF file")
+    _stl_write(tris, out)
+
+
+def _unzip(zpath, dest):
+    """Extract only .stl/.3mf/.obj members, flattened to safe names (no paths, so no traversal), size/count capped."""
+    import zipfile
+    out, total = [], 0
+    with zipfile.ZipFile(zpath) as z:
+        for zi in z.infolist():
+            base = pathlib.PurePosixPath(zi.filename.replace("\\", "/"))
+            if zi.is_dir() or "__MACOSX" in base.parts or base.suffix.lower() not in (".stl", ".3mf", ".obj"):
+                continue
+            total += zi.file_size
+            if total > MAX_UNPACKED or len(out) >= 30:
+                raise runner.Refuse("zip is too big or has too many model files")
+            t, n = dest / _safe_name(base.name), 2
+            while t.exists():
+                t = dest / f"{_safe_name(base.stem)}_{n}{base.suffix.lower()}"
+                n += 1
+            with z.open(zi) as src, open(t, "wb") as dst:
+                left = zi.file_size + 1
+                while left > 0:
+                    chunk = src.read(min(1 << 20, left))
+                    if not chunk:
+                        break
+                    dst.write(chunk)
+                    left -= len(chunk)
+            out.append(t)
+    if not out:
+        raise runner.Refuse("no STL / 3MF / OBJ files found in the zip")
+    return out
+
+
+def _printables_files(url):
+    """Printables model URL -> [(name, https link)] of its STL files via the public GraphQL API (no login). Raises Refuse."""
+    import urllib.request
+    m = re.search(r"printables\.com/(?:[a-z]{2}/)?model/(\d+)", str(url))
+    if not m:
+        raise runner.Refuse("not a Printables model link (expected printables.com/model/<number>-name)")
+    mid = m.group(1)
+
+    def gql(query, variables):
+        rq = urllib.request.Request("https://api.printables.com/graphql/", json.dumps({"query": query, "variables": variables}).encode(),
+                                    {"Content-Type": "application/json", "User-Agent": "p3d"})
+        try:
+            with urllib.request.urlopen(rq, timeout=30) as r:
+                return json.loads(r.read(2_000_000)).get("data") or {}
+        except Exception as e:
+            raise runner.Refuse(f"could not reach Printables ({e}); download the file on the phone and upload it instead") from None
+
+    pr = (gql("query($id:ID!){print(id:$id){name stls{id name}}}", {"id": mid}).get("print")) or {}
+    stls = pr.get("stls") or []
+    if not stls:
+        raise runner.Refuse("this Printables model has no STL files that can be fetched; download it and upload the file instead")
+    out = []
+    for f in stls[:10]:
+        d = gql("mutation($id:ID!,$m:ID!){getDownloadLink(id:$id,printId:$m,fileType:stl,source:model_detail){ok output{link}}}",
+                {"id": f["id"], "m": mid}).get("getDownloadLink") or {}
+        link = ((d.get("output") or {}).get("link")) or ""
+        host = urllib.parse.urlparse(link).hostname or ""
+        if d.get("ok") and link.startswith("https://") and host.endswith(".printables.com"):
+            out.append((_safe_name(f.get("name"), "model.stl"), link))
+    if not out:
+        raise runner.Refuse("Printables would not give a download link (login needed?); download the file and upload it instead")
+    return _safe_name(pr.get("name"), "printables-" + mid), out
+
+
+def _download(link, dest):
+    import urllib.request
+    n = 0
+    with urllib.request.urlopen(urllib.request.Request(link, headers={"User-Agent": "p3d"}), timeout=60) as r, open(dest, "wb") as f:
+        while True:
+            chunk = r.read(1 << 20)
+            if not chunk:
+                break
+            n += len(chunk)
+            if n > MAX_UPLOAD:
+                raise runner.Refuse("file is bigger than 100 MB")
+            f.write(chunk)
+
+
+def upload_folder(name):
+    root = models_dir() / "uploads"
+    base = f"{datetime.date.today():%Y-%m-%d}-{_safe_name(pathlib.PurePosixPath(name).stem, 'upload')}"
+    d, n = root / base, 2
+    while d.exists():
+        d = root / f"{base}~{n}"
+        n += 1
+    d.mkdir(parents=True)
+    return d
+
+
+def upload_start(name, folder, saved=None, link=None):
+    """Background task: (download link |) unpack/convert the saved upload into STL(s), render a preview, slice each with defaults
+    (PETG, standard) into a model card. NEVER queues or prints. Returns task id. `saved` is the already-written raw file."""
+    tid = _new_task("upload", model=name, msg="processing upload...", queue=False)
+
+    def work():
+        try:
+            files = []
+            if link:
+                _task_end(tid, msg="fetching from Printables...")
+                title, got = _printables_files(link)
+                for fn, url in got:
+                    _download(url, folder / fn)
+                    files.append(folder / fn)
+            else:
+                files = [saved]
+            stls = []
+            for f in files:
+                ext = f.suffix.lower()
+                if ext == ".zip":
+                    found = _unzip(f, folder)
+                    f.unlink()
+                elif ext in (".step", ".stp"):
+                    raise runner.Refuse("STEP files cannot be converted here yet: export an STL or 3MF and upload that")
+                else:
+                    found = [f]
+                for g in found:
+                    if g.suffix.lower() == ".stl":
+                        stls.append(g)
+                    else:
+                        _task_end(tid, msg=f"converting {g.name}...")
+                        (_3mf_to_stl if g.suffix.lower() == ".3mf" else _obj_to_stl)(g, g.with_suffix(".stl"))
+                        stls.append(g.with_suffix(".stl"))
+            from .. import cli, preview
+            done, bad = [], []
+            for i, stl in enumerate(stls):
+                _task_end(tid, msg=f"slicing {stl.name} ({i + 1}/{len(stls)})...")
+                try:
+                    preview.make(stl, stl.with_suffix(".png"))
+                except Exception:
+                    pass
+                try:
+                    job_dir_, final, _ = cli.slice_model(stl, filament="petg")
+                except SystemExit as e:  # one bad model in a zip must not lose the others
+                    bad.append(f"{stl.name}: {e.code}")
+                    continue
+                f = gcode_facts(str(final)) or {}
+                msg = "sliced (PETG, standard): " + " / ".join(
+                    x for x in (f.get("est_min") and mins(f["est_min"]), f.get("grams") and f"{float(f['grams']):.1f} g") if x) + advice_note(final)
+                stl.with_suffix(".slice.json").write_text(json.dumps({"msg": msg, "job": job_dir_.name}))
+                done.append(msg)
+            if not done:
+                raise runner.Refuse("; ".join(bad))
+            _task_end(tid, state="done", msg=f"{len(done)} model(s) ready in the Models tab; " + done[-1] +
+                      (f" (could not slice: {'; '.join(bad)})" if bad else ""), job=job_dir_.name)
+        except SystemExit as e:
+            _task_end(tid, state="error", msg=str(e.code))
+        except Exception as e:
+            _task_end(tid, state="error", msg=str(e))
+
+    threading.Thread(target=work, daemon=True).start()
+    return tid
+
 
 
 def level_running():
@@ -902,7 +1154,7 @@ class H(BaseHTTPRequestHandler):
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
                         "/api/queue/move",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
-                        "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool"):
+                        "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool", "/api/upload", "/api/upload/link"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -910,6 +1162,43 @@ class H(BaseHTTPRequestHandler):
         if ip not in allowed:
             return self.reply({"error": "forbidden"}, 403)
         try:
+            if path in ("/api/upload", "/api/upload/link"):
+                try:
+                    if path.endswith("link"):
+                        link = str(self.body().get("url") or "")
+                        if not re.search(r"printables\.com/(?:[a-z]{2}/)?model/\d+", link):
+                            raise runner.Refuse("not a Printables model link (expected printables.com/model/<number>-name)")
+                        folder = upload_folder("printables")
+                        try:
+                            tid = upload_start(link, folder, link=link)
+                        except runner.Refuse:
+                            folder.rmdir()
+                            raise
+                        return self.reply({"ok": "fetching", "task": tid}, 202)
+                    name = _safe_name(urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("name", [""])[0], "upload.stl")
+                    if pathlib.Path(name).suffix.lower() not in UPLOAD_EXT:
+                        raise runner.Refuse("file type not supported (use .stl .3mf .obj .step .zip)")
+                    size = int(self.headers.get("Content-Length") or 0)
+                    if not 0 < size <= MAX_UPLOAD:
+                        return self.reply({"error": "file must be 1 byte to 100 MB"}, 413)
+                    folder = upload_folder(name)
+                    try:
+                        dest, left = folder / name, size
+                        with open(dest, "wb") as f:
+                            while left > 0:
+                                chunk = self.rfile.read(min(1 << 20, left))
+                                if not chunk:
+                                    raise runner.Refuse("upload was cut off")
+                                f.write(chunk)
+                                left -= len(chunk)
+                        tid = upload_start(name, folder, saved=dest)
+                    except Exception:
+                        import shutil
+                        shutil.rmtree(folder, ignore_errors=True)
+                        raise
+                    return self.reply({"ok": "uploaded", "task": tid}, 202)
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
             if path == "/api/cancel":
                 if not config.print_cancellable():
                     return self.reply({"ok": "nothing to stop"})
