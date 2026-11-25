@@ -106,6 +106,9 @@ def export_stl(part, path, fine: bool = True) -> pathlib.Path:
     """
     p = pathlib.Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    if _is_mesh(part):                  # mesh result of mesh_cut(): already watertight from manifold3d
+        part.export(p)
+        return p
     _export_stl(part, str(p), tolerance=0.01 if fine else 0.05, angular_tolerance=0.1 if fine else 0.3)
     try:
         import trimesh
@@ -127,6 +130,56 @@ def check_solid(part) -> dict:
     with tempfile.TemporaryDirectory() as d:
         f = export_stl(part, pathlib.Path(d) / "x.stl")
         m = trimesh.load(f)
+    if _is_mesh(part):
+        return {"solids": len(m.split(only_watertight=False)), "valid": bool(m.is_volume), "watertight": bool(m.is_watertight),
+                "volume_mm3": round(float(m.volume), 1), "size_mm": tuple(round(float(v), 2) for v in m.extents)}
     bb = m.extents                      # mesh extents: OCC's own bounding box can be loose after booleans
     return {"solids": len(part.solids()), "valid": bool(part.is_valid), "watertight": bool(m.is_watertight),
             "volume_mm3": round(float(m.volume), 1), "size_mm": tuple(round(float(v), 2) for v in bb)}
+
+
+def _is_mesh(obj) -> bool:
+    return type(obj).__name__ == "Trimesh"
+
+
+def to_mesh(part, fine: bool = True):
+    """build123d Part -> trimesh.Trimesh (watertight STL tessellation)."""
+    import tempfile
+
+    import trimesh
+    with tempfile.TemporaryDirectory() as d:
+        return trimesh.load(export_stl(part, pathlib.Path(d) / "m.stl", fine), force="mesh")
+
+
+def capsule(p0, p1, r: float, sections: int = 48):
+    """Rounded rod (trimesh) from point p0 to p1, radius r: the cutter for soft grooves/flutes (no sharp ends)."""
+    import numpy as np
+    import trimesh
+    a, b = np.asarray(p0, float), np.asarray(p1, float)
+    c = trimesh.creation.capsule(height=float(np.linalg.norm(b - a)), radius=r, count=[sections, sections])
+    c.apply_transform(trimesh.geometry.align_vectors([0, 0, 1], b - a))
+    c.apply_translation((a + b) / 2)
+    return c
+
+
+def mesh_cut(base, cutters=(), adders=()):
+    """Robust texture booleans on meshes (manifold3d): base (Part or Trimesh) minus cutters plus adders.
+
+    Use for surface texture (flutes, dimples, soft grooves) where OCC booleans leave pinholes in the STL.
+    Returns a watertight trimesh.Trimesh; export_stl/check_solid accept it, so part() may return it.
+    """
+    import manifold3d as mf
+    import numpy as np
+    import trimesh
+
+    def M(t):
+        t = t if _is_mesh(t) else to_mesh(t)
+        return mf.Manifold(mf.Mesh(vert_properties=np.asarray(t.vertices, np.float32),
+                                   tri_verts=np.asarray(t.faces, np.uint32)))
+    m = M(base)
+    for c in cutters:
+        m = m - M(c)
+    for a in adders:
+        m = m + M(a)
+    out = m.to_mesh()
+    return trimesh.Trimesh(vertices=out.vert_properties[:, :3], faces=out.tri_verts, process=True)
