@@ -105,9 +105,10 @@ def run(path, multi=False):
         add("WARN", f"bed contact {contact:.0f} mm2, tip-over risk ({why}): add a brim (--brim)")
     else:
         add("PASS", f"bed contact {contact:.0f} mm2, stable")
-    over = [f"{n} {e:.0f}>{b:.0f}" for n, e, b in zip("XYZ", ext, geom.BED) if e > b]
+    bed = geom.bed()
+    over = [f"{n} {e:.0f}>{b:.0f}" for n, e, b in zip("XYZ", ext, bed, strict=False) if e > b]
     if over:
-        add("FAIL", "does not fit the 220x220x250 bed: " + ", ".join(over))
+        add("FAIL", f"does not fit the {bed[0]:.0f}x{bed[1]:.0f}x{bed[2]:.0f} bed: " + ", ".join(over))
     else:
         add("PASS", f"fits the bed ({ext[0]:.0f} x {ext[1]:.0f} x {ext[2]:.0f} mm)")
     return {"lines": out, "worst": ["PASS", "WARN", "FAIL"][worst], "bodies": nb}

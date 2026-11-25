@@ -23,8 +23,24 @@ def checks():
     except ImportError:
         yield FAIL, "pyserial", "missing -> reinstall p3d (pipx install --force ...)"
 
+    from . import machines
+    model = c.printer_model
+    bx, by, bz = c.bed
+    note = f"{model}, bed {bx:.0f} x {by:.0f} x {bz:.0f} mm, via {c.printer_type}"
+    if model == machines.DEFAULT_MODEL:
+        yield OK, "printer", note
+    elif not machines.roots():
+        yield WARN, "printer", f"{note} (no Orca profile list found to verify it -> `p3d setup`)"
+    elif machines.vendor_of(model) is None:
+        yield WARN, "printer", f"{model} not found in Orca's profiles -> `p3d printers` to see names, then `p3d setup`"
+    else:
+        yield OK, "printer", note
+
     port = c.port
-    if not port:
+    if c.printer_type != "marlin":
+        yield (OK, "printer link", f"{c.printer_type} at {c.printer_url}") if c.printer_url else \
+            (WARN, "printer link", f"{c.printer_type} but no printer_url -> `p3d setup`")
+    elif not port:
         yield FAIL, "printer port", "no USB serial device -> plug in the printer, power it on, check the cable"
     elif not os.path.exists(port):
         yield FAIL, "printer port", f"{port} not present -> printer off/unplugged, or wrong `port` in the config"

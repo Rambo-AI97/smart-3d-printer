@@ -7,7 +7,6 @@ import json, re, subprocess, sys, time
 
 from . import config
 FONT = "DejaVu Sans:style=Bold"
-BED = 220
 BASE_RETRACT = 1.2  # mm, profiles/machine.json retraction_length
 
 # ---------- models (OpenSCAD) ----------

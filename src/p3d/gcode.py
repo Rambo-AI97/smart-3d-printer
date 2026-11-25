@@ -7,7 +7,13 @@ A file written by recover carries '; p3d_layer_offset = N' so its layers keep th
 import re
 
 AXIS = re.compile(r"\b([XYZEF])(-?\d*\.?\d+)", re.I)
-Z_MAX = 245.0   # highest Z any rewritten move may use (Ender-3 V3 SE: 250 mm)
+Z_MAX = 245.0   # Ender-3 V3 SE default; z_max() gives the configured printer's value
+
+
+def z_max():
+    """Highest Z any rewritten move may use: the configured printer's height minus 5 mm."""
+    from . import config
+    return config.get().bed[2] - 5
 
 
 def strip(raw):
@@ -151,12 +157,13 @@ def _fmt(v):
     return f"{v:.3f}".rstrip("0").rstrip(".")
 
 
-def shift_line(raw, dx=0.0, dy=0.0, dz=0.0, zmax=Z_MAX):
+def shift_line(raw, dx=0.0, dy=0.0, dz=0.0, zmax=None):
     """Shift absolute G0/G1 X/Y/Z by (dx, dy, dz). Z is clamped to zmax. Other lines untouched."""
     body, sep, comment = raw.partition(";")
     m = re.match(r"\s*(G0|G1)\b", body, re.I)
     if not m or not (dx or dy or dz):
         return raw
+    zmax = z_max() if zmax is None else zmax
 
     def sub(mm):
         ax, v = mm.group(1).upper(), float(mm.group(2))
@@ -173,7 +180,7 @@ def shift_line(raw, dx=0.0, dy=0.0, dz=0.0, zmax=Z_MAX):
     return out + (sep + comment if sep else "")
 
 
-def shift_all(lines, dx=0.0, dy=0.0, dz=0.0, zmax=Z_MAX):
+def shift_all(lines, dx=0.0, dy=0.0, dz=0.0, zmax=None):
     """shift_line over a block, leaving moves alone while G91 (relative) is active."""
     out, absolute = [], True
     for raw in lines:

@@ -4,7 +4,20 @@ import trimesh
 from shapely.geometry import LineString
 from shapely.ops import polygonize, unary_union
 
-BED = (220.0, 220.0, 250.0)   # Ender-3 V3 SE build volume, mm
+
+
+def bed():
+    """Build volume (x, y, z) mm of the configured printer (config printer_model / bed_size)."""
+    from p3d import config
+    return tuple(float(v) for v in config.get().bed)
+
+
+def __getattr__(name):  # geom.BED stays readable
+    if name == "BED":
+        return bed()
+    raise AttributeError(name)
+
+
 NOZZLE, LAYER = 0.4, 0.2
 
 
