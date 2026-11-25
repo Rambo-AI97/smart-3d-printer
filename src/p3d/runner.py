@@ -17,7 +17,9 @@ def service_dir():
 
 
 def start_unit(unit, args):
-    """Run `python -m p3d.sender ARGS` as a systemd user service (survives the terminal)."""
+    """Run `python -m p3d.sender ARGS` (p3d.netsender for network printers) as a systemd user service (survives the terminal)."""
+    if unit == "p3d-print" and str(config.get().printer_type or "marlin").lower() != "marlin":
+        args = ["-m", "p3d.netsender", *args]
     if (service_dir() / f"{unit}.service").exists():
         subprocess.run(["systemctl", "--user", "reset-failed", unit], capture_output=True)
         subprocess.run(["systemctl", "--user", "start", "--no-block", unit], check=True)
@@ -28,9 +30,10 @@ def start_unit(unit, args):
 
 def resolve_gcode(arg):
     g = pathlib.Path(arg).expanduser().resolve()
+    bambu = str(config.get().printer_type or "").lower() == "bambu"
     if g.is_dir():
-        g = next(g.glob("*.gcode"), g)
-    if g.suffix != ".gcode" or not g.exists():
+        g = next(g.glob("*.3mf"), g) if bambu and next(g.glob("*.3mf"), None) else next(g.glob("*.gcode"), g)
+    if not (g.suffix == ".gcode" or (bambu and g.suffix == ".3mf")) or not g.exists():
         raise Refuse(f"not a G-code file: {g}")
     return g
 
@@ -64,6 +67,10 @@ def start(gcode, force=False, pause_at=(), confirm_z=False, stop_cooldown=False)
         else:
             raise Refuse("a print is already running (p3d status)" if config.print_cancellable()
                          else "the previous job is cooling down: heaters are off, `systemctl --user stop p3d-print` then print")
+    if pause_at:
+        from . import printers
+        if not printers.backend_class(printers.printer_type()).LAYERS:
+            raise Refuse(f"--pause-at-layer is not available for {printers.printer_type()} printers (no layer number reported)")
     meta = job_meta(g)
     if meta.get("manual_z") and not confirm_z:
         raise Refuse("this job needs the nozzle hand-placed on the part first (see its INSTRUCTIONS.txt); "

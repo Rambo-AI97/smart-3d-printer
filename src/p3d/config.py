@@ -26,6 +26,11 @@ CONFIG_DIR = CONFIG_FILE.parent
 DEFAULTS = {
     "port": "",              # empty = first /dev/serial/by-id/* device
     "baud": 115200,
+    "printer_type": "marlin",  # marlin (USB serial) | klipper (Moonraker) | octoprint | prusalink | bambu (LAN mode)
+    "printer_url": "",         # network printers: http://host[:port] (bambu: the printer's IP)
+    "printer_api_key": "",     # Moonraker (optional), OctoPrint, PrusaLink API key
+    "bambu_serial": "",        # Bambu: printer serial number
+    "bambu_access_code": "",   # Bambu: LAN access code shown on the printer
     "orca_slicer": "",       # empty = search PATH and common places
     "openscad": "",
     "data_dir": "",          # print log + samples (default ~/.local/share/p3d)

@@ -468,6 +468,7 @@ async function ctl(url){const m=$('m-bar');m.textContent='...';
 async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-store'})).json();
   for(const[k,id]of[['pause','c-pause'],['resume','c-resume'],['stop','c-stop'],['next','c-next'],['retry','c-retry'],['level','c-level'],['show','c-show'],['cooldown','c-cool']]){const b=$(id);b.disabled=!CT[k];b.title=CT[k]?'':(CT.why[k]||'')}
   $('c-lstop').classList.toggle('hide',!CT.lstop);
+  const PC=(CT.printer||{}).caps||[];for(const[cap,id]of[['level','c-level'],['level','c-show'],['level','c-cool'],['pause','c-pause']])$(id).classList.toggle('hide',!PC.includes(cap));
   spoolFill(CT.spools);
   const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
   $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg+(t.kind==='level'?lvlEta(t):'')).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');

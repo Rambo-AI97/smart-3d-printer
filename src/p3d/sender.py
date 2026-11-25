@@ -406,6 +406,9 @@ def cli(argv=None):
         sys.exit(cli.__doc__)
     if argv[0] == "--cooldown":
         return main_cooldown()
+    if argv[0] == "--queued" and str(config.get().printer_type or "marlin").lower() != "marlin":
+        from . import netsender   # network printer: the same p3d-print unit runs the network sender
+        return netsender.cli(argv)
     if argv[0] == "--queued":
         q = config.get().queue
         path = q.read_text().strip()
