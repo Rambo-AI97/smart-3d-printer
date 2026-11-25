@@ -23,12 +23,18 @@ ntfy_token = ""      # only for a protected topic
 web_port = 8765
 web_host = "0.0.0.0" # "127.0.0.1" = this PC only
 
-# Printer geometry used by cancel (park the head at the back so the part is reachable)
-park_y = 220
+# Which printer: any machine from `p3d printers` (p3d setup picks it and fills the rest)
+printer_model = "Creality Ender-3 V3 SE 0.4 nozzle"
+printer_type = "marlin"   # marlin | klipper | octoprint | prusalink | bambu
+# printer_url = ""  printer_api_key = ""  bambu_serial = ""  bambu_access_code = ""
+# bed_size = [220, 220, 250]   # empty/absent = read from the machine profile
+
+# Where cancel parks the head (default = bed depth); z_home_xy default = bed centre
+# park_y = 220
 
 # Control endpoints (pause, resume, queue/next, ideas) accept localhost and these addresses (cancel_from counts too).
 control_from = []
 ideas_file = ""      # print-ideas board (Markdown); default <data_dir>/../ideas.md
 # Where the printer probes Z (G28) and the clearance kept around it before p3d recover/addon may use G28.
-z_home_xy = [110, 110]
+# z_home_xy = [110, 110]
 z_home_margin = 12
