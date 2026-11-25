@@ -694,6 +694,10 @@ COMMANDS = {
 }
 
 
+from . import tracker as _tracker  # noqa: E402  (verdict, tracker, reopen, request)
+COMMANDS["Tracker"] = _tracker.commands(A)
+
+
 def build():
     width = max(len(n) for cmds in COMMANDS.values() for n, *_ in cmds)
     epilog = "\n".join(f"{g}:\n" + "\n".join(f"  {n:<{width}}  {h}" for n, _, h, _ in cmds) + "\n"
