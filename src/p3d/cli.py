@@ -307,6 +307,8 @@ def cmd_shot(a):
 def cmd_make(a):
     """scad -> STL -> slice (keep-orient) -> warnings -> small shot. One call per design iteration."""
     stl = cmd_scad(argparse.Namespace(file=a.name, D=a.D, view=None))
+    from .eng.commands import gate
+    stl = gate(stl, a)          # pre-slice check (+ --auto-orient); exits on FAIL unless --force
     a.model, a.keep_orient = str(stl), not a.orient
     final = cmd_slice(a)
     from .shot import shot
@@ -563,6 +565,8 @@ def A(*flags, **kw):
     return (flags, kw)
 
 
+from .eng.commands import COMMANDS as ENG_COMMANDS, MAKE_ARGS  # noqa: E402  (light: no geometry imports)
+
 QUAL = A("-q", "--quality", default="standard", choices=["draft", "standard", "fine"])
 def default_filament():
     """Active spool's material, else config 'filament', else petg."""
@@ -626,7 +630,7 @@ COMMANDS = {
          [A("name"), A("-D", action="append", help="param=value (repeat)"), QUAL, FIL,
           A("--supports", action="store_true"), A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
           A("--walls", type=int), A("--infill", type=int),
-          A("--orient", action="store_true", help="let the slicer auto-rotate")]),
+          A("--orient", action="store_true", help="let the slicer auto-rotate"), *MAKE_ARGS]),
         ("shot", cmd_shot, "small labelled JPG of job previews (to send to a phone)",
          [A("items", nargs="+", help="job dirs, gcode, stl/scad or png"), A("-o", "--out")]),
         ("model", cmd_model, "any .glb/.obj/.fbx/.stl -> solid printable STL (Blender)",
@@ -692,6 +696,8 @@ COMMANDS = {
          [A("--no-start", action="store_true", help="write the units but don't start the dashboard")]),
     ],
 }
+
+COMMANDS["Engineer"] = ENG_COMMANDS
 
 
 def build():
