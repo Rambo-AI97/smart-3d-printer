@@ -39,6 +39,10 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 | | `p3d pack NAME` | upload pack for Printables (STL, source, render) |
 | | `p3d recover JOB [--from-layer N \| --z MM]` | continue a failed print from its last good layer (writes a job, never prints) |
 | | `p3d addon MODEL --on-z MM [--x --y]` | slice a model to print on top of an existing part (writes a job, never prints) |
+| Engineer | `p3d check MODEL.stl\|NAME [--multi]` | pre-slice gate (also runs inside `p3d make`, `--force` overrides): watertight, bodies, thin walls, empty layers, overhang, bed fit; PASS/WARN/FAIL |
+| | `p3d stress NAME --load KG --section-at Z --arm MM` / `--fix-face -z --load-at X,Y,Z [--dir -z]` | beam/section stress from the real mesh vs PETG/PLA/TPU layer-line and in-plane strength, safety factor |
+| | `p3d coupon NAME --z A..B \| --box x0,y0,z0,x1,y1,z1` | cut the critical slice and slice it as a tiny fit test (time, grams; never queued) |
+| | `p3d orient MODEL [--load-dir X,Y,Z]` | score each stable face (supports, bed contact, height, strength), write the best `_oriented.stl`; `p3d make --auto-orient` |
 | Calibrate | `p3d level [--hot 70]` | probe the bed, colour map, what to adjust |
 | | `p3d calib temp\|retraction\|flow\|firstlayer` | make a calibration print |
 | | `p3d pid` / `p3d probe` | PID-tune heaters / read-only firmware check |
@@ -51,6 +55,7 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 
 ### Smart features
 
+- **Engineer tools** (`p3d.eng`): need trimesh/shapely/manifold3d; used in-process if installed, else run in the venv named by `P3D_CAD_PYTHON` (default `~/.venvs/cad/bin/python`), and skipped with a message if neither exists.
 - **Slice advisor:** runs after every `p3d slice`, `p3d queue add` and dashboard (re)slice, and at the end of `p3d inspect`; it flags problems before you print (tall part without brim, support-heavy or unused supports, heavy walls/infill on a small part, off-centre or bad-mesh placement, filament vs active spool, long fine prints); thresholds are constants in `advisor.py`, `advise(info)` is reusable.
 - **Bed step-down:** PETG first layer 70 C, then 60 C (PLA 60/55); set in `flatten_profile.py`, applied to every plate variant.
 - **Pause/resume** works on stock Marlin: the sender stops at a layer boundary, retracts, lifts and parks; resume returns, primes and carries on. The dashboard and the ntfy message have Pause/Resume buttons (POST `/api/pause`, `/api/resume`).
