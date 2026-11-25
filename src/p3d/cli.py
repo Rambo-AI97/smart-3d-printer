@@ -313,6 +313,16 @@ def cmd_make(a):
     print("shot:", shot([pathlib.Path(final).parent]))
 
 
+def cmd_build(a):
+    from .shapecmds import cmd_build as f
+    f(a)
+
+
+def cmd_sheet(a):
+    from .shapecmds import cmd_sheet as f
+    f(a)
+
+
 def cmd_pack(a):
     """Printables pack: STL, .scad, render.png, starter pack.json. Never overwrites pack.json or photo_*."""
     import csv
@@ -625,6 +635,14 @@ COMMANDS = {
         ("make", cmd_make, "scad NAME -> STL -> slice (kept orientation) -> warnings + small shot JPG",
          [A("name"), A("-D", action="append", help="param=value (repeat)"), QUAL, FIL,
           A("--supports", action="store_true"), A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
+          A("--walls", type=int), A("--infill", type=int),
+          A("--orient", action="store_true", help="let the slicer auto-rotate")]),
+        ("sheet", cmd_sheet, "design sheet JPG (front/side/top/iso, mm, thinnest wall, context) BEFORE slicing",
+         [A("model", help="models/py/NAME.py, NAME, or an .stl"), A("--context", choices=["mantel", "wall", "shelf"]),
+          A("-o", "--out")]),
+        ("build", cmd_build, "python design models/py/NAME.py (build123d) -> STL -> slice -> warnings + shot JPG",
+         [A("name"), QUAL, FIL, A("--supports", action="store_true"),
+          A("--brim", nargs="?", const=True, type=float, default=False, metavar="MM", help="brim (optional width mm, default 5)"),
           A("--walls", type=int), A("--infill", type=int),
           A("--orient", action="store_true", help="let the slicer auto-rotate")]),
         ("shot", cmd_shot, "small labelled JPG of job previews (to send to a phone)",

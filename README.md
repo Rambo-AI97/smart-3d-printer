@@ -83,7 +83,7 @@ After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log le
 ## Models
 
 Put your own OpenSCAD parts in `models/scad/` (not tracked in this repo): `p3d scad NAME` renders one,
-`p3d make NAME` renders + slices it. Some parts made with this tool are on Printables:
+`p3d make NAME` renders + slices it. Smooth, engineered shapes: see [Shape workflow](docs/shapes.md). Some parts made with this tool are on Printables:
 [monitor stand](https://www.printables.com/model/1905054), [stroller cup holder](https://www.printables.com/model/1905061).
 
 ## More
@@ -91,6 +91,7 @@ Put your own OpenSCAD parts in `models/scad/` (not tracked in this repo): `p3d s
 - [Changelog](CHANGELOG.md): what changed in each version
 - [Data recorded](docs/data.md): log columns, per-print samples, where files live
 - [Calibration](docs/calibration.md): which tests, in which order, and the values found
+- [Shape workflow](docs/shapes.md): build123d parts library, design sheet, `p3d sheet` / `p3d build`
 - [Game models](docs/game-models.md): turning a Godot/Blender model into a printable STL
 - Development: `pip install -e ".[dev]"`, `pytest`, `ruff check .`; enable the privacy hook once with
   `git config core.hooksPath .githooks`
