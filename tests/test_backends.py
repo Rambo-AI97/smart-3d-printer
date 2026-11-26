@@ -11,7 +11,6 @@ import pytest
 from p3d import config, netsender, printers
 from p3d.printers import BackendError
 from p3d.printers.base import multipart
-from conftest import GCODE
 
 
 class Fake:

@@ -50,17 +50,20 @@ def settings_of(row):
 
 def settings_changes(rows):
     """[{date, name, changes: ['bed 70 -> 60', ...]}] each time the tracked settings differ from the job before.
-    Jobs without a snapshot (older rows) are skipped for comparison; empty values never count as a change."""
-    out, prev = [], None
+    Jobs without a snapshot (older rows) are skipped for comparison; empty values never count as a change.
+    Compared per filament: switching PLA <-> PETG is not a settings change (each material keeps its own baseline)."""
+    out, prev_by = [], {}
     for r in printed(rows):
         cur = {k: v for k, v in settings_of(r) if v}
         if not cur:
             continue
+        mat = (r.get("filament") or "").strip().lower()
+        prev = prev_by.get(mat)
         if prev is not None:
             ch = [f"{LABEL[k]} {prev.get(k, '?')} -> {cur[k]}" for k in TRACKED if k in cur and cur[k] != prev.get(k, cur[k])]
             if ch:
-                out.append({"date": r["date"], "name": r["name"], "changes": ch})
-        prev = {**(prev or {}), **cur}
+                out.append({"date": r["date"], "name": r["name"], "changes": [f"{mat.upper()}: {c}" for c in ch] if mat else ch})
+        prev_by[mat] = {**(prev or {}), **cur}
     return out
 
 

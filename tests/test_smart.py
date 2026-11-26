@@ -321,3 +321,12 @@ def test_remove_layer_file_semantics(job):
     assert pause.remove_pause_layers([5]).endswith("2, 9") and pause.read_pause_at() == [2, 9]
     pause.remove_pause_layers()
     assert pause.read_pause_at() == []
+
+
+def test_settings_changes_per_filament():
+    from p3d import insights
+    pla = {"status": "done", "name": "x", "filament": "PLA", "bed_first": "60", "nozzle_first": "215"}
+    petg = {"status": "done", "name": "y", "filament": "PETG", "bed_first": "70", "nozzle_first": "240"}
+    rows = [dict(pla, date="1"), dict(petg, date="2"), dict(pla, date="3"), dict(petg, date="4", bed_first="75")]
+    ch = insights.settings_changes(rows)
+    assert len(ch) == 1 and ch[0]["date"] == "4" and ch[0]["changes"][0].startswith("PETG:")

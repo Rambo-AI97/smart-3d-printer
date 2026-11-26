@@ -25,7 +25,20 @@ import trimesh  # noqa: E402
 from matplotlib.collections import PolyCollection  # noqa: E402
 from PIL import Image  # noqa: E402
 
-OUT_DIR = pathlib.Path.home() / ".local/share/p3d/shots"
+def _out_dir():
+    """Config shots_dir (or P3D_SHOTS), else <data_dir>/shots. Read lazily: this module also runs in the CAD venv."""
+    import os
+    d = os.environ.get("P3D_SHOTS")
+    if not d:
+        try:
+            from p3d import config
+            d = str(config.get().shots)
+        except Exception:
+            d = str(pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d")).expanduser() / "shots")
+    return pathlib.Path(d).expanduser()
+
+
+OUT_DIR = None  # resolved per call by _out_dir()
 BG, FG, ACCENT, WARN = "#14161a", "#e8e8e8", "#7fb4ff", "#ff6b5e"
 VIEWS = {  # name: (direction from model to viewer, screen-up vector, x label, y label)
     "FRONT  (X, Z)": ((0, -1, 0), (0, 0, 1), "x", "z"),
@@ -154,8 +167,8 @@ def make_sheet(mesh, title, ctx_spec=None, out=None):
     plt.close(fig)
     buf.seek(0)
     im = Image.open(buf).convert("RGB")
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = pathlib.Path(out) if out else OUT_DIR / f"sheet-{title}-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
+    _out_dir().mkdir(parents=True, exist_ok=True)
+    out = pathlib.Path(out) if out else _out_dir() / f"sheet-{title}-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
     q = 82
     while True:
         im.save(out, "JPEG", quality=q, optimize=True)

@@ -1,112 +1,97 @@
 # smart-3d-printer (`p3d`)
 
-Run a USB-connected 3D printer from the command line: slice a model, print it in the background,
-watch it on a live phone-friendly dashboard, and keep a log of every print (time, filament, temperatures, your rating).
-Simple enough for an AI assistant to drive safely. Tested on a Creality **Ender-3 V3 SE** with stock Marlin firmware.
+**Design it, check it, print it, learn from it.** One open-source tool for your 3D printer: engineering CAD checks
+before you slice, Orca Slicer for any of 500+ printers, background printing, a live phone dashboard and a log that
+learns what works.
 
-<img src="docs/dashboard.png" width="32%" alt="Live tab with controls and bed mesh"> <img src="docs/dashboard-queue.png" width="32%" alt="Print queue"> <img src="docs/dashboard-stats.png" width="32%" alt="Stats">
+[![CI](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml/badge.svg)](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-## Quick start
+<p align="center"><img src="docs/screens/engineering.jpg" width="88%" alt="Design sheet of a shelf bracket (front, side, top, iso, dimensions, thinnest wall) above the p3d check and p3d stress results"></p>
 
-One line (Linux; installs uv, p3d with the CAD libraries and Orca Slicer, then runs setup and the checks):
+## Install (one line)
 
-```
+```bash
 curl -fsSL https://raw.githubusercontent.com/Rambo-AI97/smart-3d-printer/main/install.sh | bash
 ```
 
-Flags go after `bash -s --`: `--yes` (no questions), `--no-orca`, `--no-setup`. Update later with `p3d update`.
+It installs p3d with its CAD libraries, downloads Orca Slicer if you don't have it, sets up USB access, then asks
+**which printer you have** and how it's connected. Run `p3d doctor` any time: every ✗ line says how to fix it.
+By hand: `uv tool install --python 3.12 "p3d[all] @ git+https://github.com/Rambo-AI97/smart-3d-printer"`, then `p3d setup`.
 
-By hand you need Linux, Python 3.11+, [Orca Slicer](https://github.com/SoftFever/OrcaSlicer/releases)
-(the AppImage is fine) and, optionally, [OpenSCAD](https://openscad.org) for parts and previews.
+## Use it
 
-1. **Install:** `uv tool install --python 3.12 "p3d[all] @ git+https://github.com/Rambo-AI97/smart-3d-printer"` (or `pipx install git+https://github.com/Rambo-AI97/smart-3d-printer`, then `p3d install-cad`). Extras: `cad` (build123d, trimesh, shapely, manifold3d), `bambu`, `all`.
-2. **Set up:** plug in the printer, switch it on, run `p3d setup` (finds the port and the slicer, asks for optional phone alerts).
-3. **Check:** `p3d install-service`, then `p3d doctor`. Fix any ✗ line it shows (it tells you how).
-4. **Slice:** `p3d slice my-part.stl` → prints the G-code path, time and grams.
-5. **Print:** clear the bed, then `p3d print <that .gcode>`. Watch with `p3d web --open` or `p3d status`.
+```bash
+p3d sheet my_part.stl        # 4-view design sheet: sizes, thinnest wall. Approve the shape first
+p3d check my_part.stl        # pre-slice gate: watertight, thin walls, overhangs, fits YOUR bed
+p3d slice my_part.stl        # -> G-code, time, grams, plus advice (brim? supports? wrong spool?)
+p3d print <job>              # prints in the background; close the terminal, it keeps going
+p3d web --open               # live dashboard, also on your phone
+p3d rate 5                   # after the print, so the log learns what works
+```
 
-After the print: `p3d rate 5` (or `p3d rate 2 --issues stringing`) so the log learns what works.
+## Works with your printer
 
-## Commands
+`p3d setup` searches the printer profiles **Orca Slicer ships** (Prusa, Bambu Lab, Creality, Voron, Elegoo,
+Anycubic, Sovol, Qidi, Artillery, Flashforge, Snapmaker, UltiMaker, RatRig and more) and takes the bed size,
+height and slicer presets from there. `p3d printers ender 3` shows what matches.
 
-| Group | Command | What it does |
+| Connection | Printers | Status |
 |---|---|---|
-| Print | `p3d status [--json]` | current job, progress, temperatures |
-| | `p3d print FILE.gcode` | print in the background (survives closing the terminal) |
-| | `p3d print FILE --pause-at-layer N` | pause before layer N (magnets, colour swap); `--force` ignores a low spool |
-| | `p3d pause [--at-layer N \| --remove-layer N \| --clear]` / `p3d resume` | host-side pause at a layer change (retract, lift, park, heaters stay on); `--remove-layer`/`--clear` cancel pending layer pauses mid-print |
-| | `p3d cancel` | safe stop: heaters off, lift, park |
-| | `p3d queue add JOB \| list \| remove N \| move N M \| next` | queue of approved jobs; `next` starts the head (refuses while printing or when the spool is short) |
-| | `p3d wait layer\|done` | block until the first layer is down / the job ends (for scripts) |
-| | `p3d retry` / `p3d cooldown` | reprint the newest logged job / after a print: wait until cool, motors off, alert |
-| | `p3d web [--open]` | live dashboard URL (also for your phone) |
-| Design | `p3d slice MODEL [-q draft\|standard\|fine] [-f pla\|petg] [--supports] [--brim]` | model → G-code |
-| | `p3d scad NAME` | OpenSCAD part → STL + preview |
-| | `p3d model FILE` / `p3d game PRESET` | any .glb/.obj/.fbx/.stl → solid printable STL (Blender); a Godot game model by preset |
-| | `p3d inspect JOB_DIR\|FILE.gcode` | where the time and filament go, plus slice advice (brim, supports, heavy settings, placement, spool) |
-| | `p3d pack NAME` | upload pack for Printables (STL, source, render) |
-| | `p3d recover JOB [--from-layer N \| --z MM]` | continue a failed print from its last good layer (writes a job, never prints) |
-| | `p3d addon MODEL --on-z MM [--x --y]` | slice a model to print on top of an existing part (writes a job, never prints) |
-| Engineer | `p3d check MODEL.stl\|NAME [--multi]` | pre-slice gate (also runs inside `p3d make`, `--force` overrides): watertight, bodies, thin walls, empty layers, overhang, bed fit; PASS/WARN/FAIL |
-| | `p3d stress NAME --load KG --section-at Z --arm MM` / `--fix-face -z --load-at X,Y,Z [--dir -z]` | beam/section stress from the real mesh vs PETG/PLA/TPU layer-line and in-plane strength, safety factor |
-| | `p3d coupon NAME --z A..B \| --box x0,y0,z0,x1,y1,z1` | cut the critical slice and slice it as a tiny fit test (time, grams; never queued) |
-| | `p3d orient MODEL [--load-dir X,Y,Z]` | score each stable face (supports, bed contact, height, strength), write the best `_oriented.stl`; `p3d make --auto-orient` |
-| Calibrate | `p3d level [--hot 70]` | probe the bed, colour map, what to adjust |
-| | `p3d calib temp\|retraction\|flow\|firstlayer` | make a calibration print |
-| | `p3d pid` / `p3d probe` | PID-tune heaters / read-only firmware check |
-| Data | `p3d log`, `p3d history`, `p3d rate` | job log, totals, ratings (issue tags print a concrete next step) |
-| | `p3d import-history` | add past G-code files found on this PC to the log |
-| | `p3d suggest`, `p3d stats` | recurring issues with fixes; success, rating, grams, hours per week and when settings changed |
-| | `p3d spool add\|list\|use\|set` | filament spools; grams are deducted when a job ends (done = all, stopped = share printed) |
-| | `p3d idea add\|list\|move\|done` | print ideas in a hand-editable `ideas.md` |
-| Setup | `p3d setup`, `p3d doctor`, `p3d install-service` | first run, health check, background services |
+| **USB (Marlin)** | Ender-3 / V2 / V3 SE, Prusa MK3, Anycubic, Artillery, Sovol SV06, most stock printers | tested daily on an Ender-3 V3 SE, all features |
+| **Klipper (Moonraker)** | Voron, Creality K1 / K2 / Ender-3 V3 KE, Sovol SV08, Elegoo Neptune 4, Qidi, Sonic Pad | new, tested against a simulated printer |
+| **OctoPrint** | anything behind OctoPrint | new, tested against a simulated printer |
+| **PrusaLink** | Prusa MK4 / MK4S / MK3.9 / XL / MINI / Core One | new, tested against a simulated printer |
+| **Bambu Lab (LAN mode)** | X1, P1, A1, H2D | new, tested against a simulated printer |
 
-### Smart features
+Every connection gets slicing, printing, pause/resume, cancel, live status, the print log, spools and phone alerts.
+Bed leveling, PID tuning, calibration prints and print recovery talk to the firmware directly, so they need USB.
+Using a network printer? A report of your first print is the most useful issue you can open.
 
-- **Engineer tools** (`p3d.eng`): need trimesh/shapely/manifold3d (the `cad` extra, included in `p3d[all]`); used in-process if installed, else run in the venv from `p3d install-cad` (or the Python in `P3D_CAD_PYTHON` / config `cad_python`), and skipped with a message if neither exists.
-- **Slice advisor:** runs after every `p3d slice`, `p3d queue add` and dashboard (re)slice, and at the end of `p3d inspect`; it flags problems before you print (tall part without brim, support-heavy or unused supports, heavy walls/infill on a small part, off-centre or bad-mesh placement, filament vs active spool, long fine prints); thresholds are constants in `advisor.py`, `advise(info)` is reusable.
-- **Bed step-down:** PETG first layer 70 C, then 60 C (PLA 60/55); set in `flatten_profile.py`, applied to every plate variant.
-- **Pause/resume** works on stock Marlin: the sender stops at a layer boundary, retracts, lifts and parks; resume returns, primes and carries on. The dashboard and the ntfy message have Pause/Resume buttons (POST `/api/pause`, `/api/resume`).
-- **Recover / add-on:** the Ender-3 V3 SE probes Z with the nozzle at one point (config `z_home_xy`, default bed centre). If the part's footprint covers that point, or is unknown, the generated job never probes Z: you lower the nozzle onto the part top by hand and the job declares that height (`G92 Z`), then homes X/Y only. If the footprint is known and clear (+ `z_home_margin`), it uses a normal `G28`. Both write `INSTRUCTIONS.txt` next to the G-code and need `p3d print --confirm-z`. Untested on hardware until watched once.
-- **Stats:** every job stores a settings snapshot (layer height, temperatures incl. the bed step-down, speeds, walls, infill, retraction, profile hash); the dashboard Stats tab charts success and rating by week, issues, grams and hours, spool levels and a settings-change timeline.
-- **Dashboard controls:** a bar on every tab with Pause, Resume, Stop, Start next, Retry last print (`p3d retry`), Check bed level (one `p3d level --hot 70` probe as a background task, colour map when done; refused while a print runs or cools), Last bed mesh and Cooldown. Queue, history and model cards have a Reslice form (filament, quality, walls, infill, brim, supports, keep orientation, optional pause at layer N with a note); the result shows time, grams and a preview with Add to queue. The Knowledge tab renders and edits the hub's rules, filament guide, printer lessons and ideas files (fixed allowlist, atomic save, `.bak` of the previous version). All writes are limited to `control_from` addresses.
-- **Control endpoints** (`/api/cancel`, `pause`, `resume`, `queue/next`, `ideas`) accept localhost plus the addresses in `cancel_from` / `control_from` in the config. The queue lives in `print_queue.json` and spools in `spools.json` in the data dir; the ideas board is `ideas.md` next to it (`ideas_file` to move it).
-- **Loud alerts**: set `urgent_ntfy_url` to a second ntfy topic your phone lets through silent mode. Print done, printer cool, failed/cancelled, paused, still warm, not started and spool low also go there with `Priority: 5`, only between `urgent_hours` (default `[7, 22]`, local time). Set `quips_file` (lines under `[print_start]`, `[print_done]`, `[print_failed]`) to put a funny line above the facts. Test with `p3d notify-test --dry-run` (prints, sends nothing) or `p3d notify-test`.
+## Live dashboard
 
-`p3d --help` lists everything; `p3d <command> -h` explains one command.
+<p align="center"><img src="docs/screens/dashboard.jpg" width="88%" alt="Dashboard on a desktop: print preview, progress ring, time left, layer, queue with thumbnails"></p>
+<p align="center"><img src="docs/screens/phone.jpg" width="88%" alt="Dashboard on a phone: live print, print queue with reslice, and the print tracker"></p>
 
-## Works with
+Pause, resume, stop, start the next job and re-slice with other settings from your phone; upload a model or paste a
+Printables link. Phone alerts through [ntfy](https://ntfy.sh): started, done, failed, cool enough to switch off, spool low.
 
-- **Ender-3 V3 SE (stock Marlin, USB):** tested daily. Bundled Orca profiles are tuned for it (0.4 mm nozzle, PLA and PETG).
-- **Other Marlin printers over USB:** the sender speaks plain Marlin (line numbers, checksums, resend), so it should work.
-  Change three things: the slicer profiles (`p3d profiles` after editing the preset names in
-  `src/p3d/flatten_profile.py`, or drop your own Orca CLI profiles in `~/.config/p3d/profiles/`),
-  `park_y` in the config (your bed depth), and check `p3d probe` answers. Run your first print watched.
-- **Klipper:** not supported. Klipper printers are driven through Moonraker, not a raw serial port;
-  use Mainsail/Fluidd there. (On the V3 SE, Klipper also disables the stock screen and the auto Z-offset.)
+<p align="center"><img src="docs/screens/stats.jpg" width="88%" alt="Stats: success rate and rating by week, issue frequency, spool levels, filament and hours per week"></p>
 
-## Safety rules
+Every print is logged with its settings, so the Stats tab can tell you whether a change helped or hurt.
 
-1. Never start a print unless a person said "print it" **and** confirmed the bed is clear.
+## Engineering tools
+
+| Command | What it answers |
+|---|---|
+| `p3d sheet` | Does the shape look right? Front, side, top and iso views with sizes and the thinnest wall marked |
+| `p3d check` | Will it print? Watertight, one body, thin walls, empty layers, overhangs, bed contact, fits your bed |
+| `p3d stress` | Will it hold? Bending and shear from the real mesh against PLA / PETG / TPU strength, layer direction included |
+| `p3d orient` | Which side down? Scores every stable face for supports, bed contact, height and strength |
+| `p3d coupon` | Will it fit? Slices only the critical section as a minutes-long test print |
+| `p3d build` | Parametric parts in Python ([build123d](https://github.com/gumyr/build123d)): fillets, countersunk screws, nut pockets, snap fits, print-in-place hinges, threads |
+
+Try it: `p3d sheet examples/shelf_bracket.py`. Library and workflow: [Shape workflow](docs/shapes.md).
+
+## Safety
+
+1. A print starts only when a person runs `p3d print` or presses a button, never by itself. Clear the bed first.
 2. Watch the first layer of every print with new settings or a new filament.
 3. Don't leave a printer unattended without a way to cut power. `p3d cancel` stops heaters and motion,
-   but it can't fix a part that came loose: switch the printer off.
-4. The dashboard is read-only on purpose. Keep it on your home network or a VPN, never on the open internet.
-
-## Models
-
-Put your own OpenSCAD parts in `models/scad/` (not tracked in this repo): `p3d scad NAME` renders one,
-`p3d make NAME` renders + slices it. Smooth, engineered shapes: see [Shape workflow](docs/shapes.md). Some parts made with this tool are on Printables:
-[monitor stand](https://www.printables.com/model/1905054), [stroller cup holder](https://www.printables.com/model/1905061).
+   but it can't fix a part that came loose.
+4. The dashboard has Stop and Pause buttons: keep it on your home network or a VPN, never on the open internet.
+   Its buttons only work from this computer and the addresses you list in `control_from`.
 
 ## More
 
-- [Changelog](CHANGELOG.md): what changed in each version
+- [Command reference](docs/commands.md): every command, and how the smart parts work
+- [Shape workflow](docs/shapes.md): design sheet, build123d parts library, `p3d build`
 - [Data recorded](docs/data.md): log columns, per-print samples, where files live
-- [Calibration](docs/calibration.md): which tests, in which order, and the values found
-- [Shape workflow](docs/shapes.md): build123d parts library, design sheet, `p3d sheet` / `p3d build`
-- [Game models](docs/game-models.md): turning a Godot/Blender model into a printable STL
-- Development: `pip install -e ".[dev]"`, `pytest`, `ruff check .`; enable the privacy hook once with
-  `git config core.hooksPath .githooks`
+- [Calibration](docs/calibration.md): which tests, in which order
+- [Changelog](CHANGELOG.md)
+- Development: `pip install -e ".[dev,cad]"`, `pytest`, `ruff check .`; privacy hook: `git config core.hooksPath .githooks`
 
-MIT licence.
+Parts made with it are on Printables: [monitor stand](https://www.printables.com/model/1905054),
+[stroller cup holder](https://www.printables.com/model/1905061). MIT licence.

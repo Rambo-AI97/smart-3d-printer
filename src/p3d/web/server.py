@@ -702,7 +702,7 @@ def upload_start(name, folder, saved=None, link=None):
                 except Exception:
                     pass
                 try:
-                    job_dir_, final, _ = cli.slice_model(stl, filament="petg")
+                    job_dir_, final, _ = cli.slice_model(stl, filament=cli.default_filament())
                 except SystemExit as e:  # one bad model in a zip must not lose the others
                     bad.append(f"{stl.name}: {e.code}")
                     continue

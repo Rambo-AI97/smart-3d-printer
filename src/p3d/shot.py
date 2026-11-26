@@ -10,7 +10,20 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 TILE = 360
-OUT_DIR = pathlib.Path.home() / ".local/share/p3d/shots"
+def _out_dir():
+    """Config shots_dir (or P3D_SHOTS), else <data_dir>/shots. Read lazily: this module also runs in the CAD venv."""
+    import os
+    d = os.environ.get("P3D_SHOTS")
+    if not d:
+        try:
+            from p3d import config
+            d = str(config.get().shots)
+        except Exception:
+            d = str(pathlib.Path(os.environ.get("P3D_DATA", pathlib.Path.home() / ".local/share/p3d")).expanduser() / "shots")
+    return pathlib.Path(d).expanduser()
+
+
+OUT_DIR = None  # resolved per call by _out_dir()
 
 
 def _font(size):
@@ -74,7 +87,7 @@ def shot(items, out=None, tile=TILE):
     sheet = Image.new("RGB", (cols * tile, rows * (tile + 46)), (24, 26, 30))
     for i, t in enumerate(tiles):
         sheet.paste(t, ((i % cols) * tile, (i // cols) * (tile + 46)))
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out = pathlib.Path(out) if out else OUT_DIR / f"shot-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
+    _out_dir().mkdir(parents=True, exist_ok=True)
+    out = pathlib.Path(out) if out else _out_dir() / f"shot-{time.strftime('%Y%m%d-%H%M%S')}.jpg"
     sheet.save(out, "JPEG", quality=78, optimize=True)
     return out

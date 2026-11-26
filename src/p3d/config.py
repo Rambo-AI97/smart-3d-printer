@@ -36,6 +36,7 @@ DEFAULTS = {
     "openscad": "",
     "data_dir": "",          # print log + samples (default ~/.local/share/p3d)
     "jobs_dir": "",          # sliced jobs, G-code (default <data_dir>/jobs)
+    "shots_dir": "",         # preview JPGs and design sheets (default <data_dir>/shots)
     "publish_dir": "",       # p3d pack output (default <data_dir>/publish)
     "models_dir": "",        # your .scad parts (default: ./models if it exists, else <data_dir>/models)
     "ntfy_url": "",          # e.g. https://ntfy.sh/my-printer-topic (empty = no phone alerts)
@@ -94,6 +95,10 @@ class Config:
     @property
     def jobs(self):
         return self._path("P3D_JOBS", "jobs_dir", self.data / "jobs")
+
+    @property
+    def shots(self):
+        return self._path("P3D_SHOTS", "shots_dir", self.data / "shots")
 
     @property
     def publish(self):

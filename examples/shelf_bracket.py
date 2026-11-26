@@ -5,7 +5,7 @@ gusset carries the load in-plane, the strong direction. No supports. Try: p3d sh
 """
 from build123d import Box, Polyline, make_face, extrude, Pos, Rot, Align, Axis, Plane
 
-from p3d.shapes import soften, SCREWS
+from p3d.shapes import soften
 from p3d.shapes.hardware import _screw_cutter
 
 LEG, W, T, GUSSET_T = 60.0, 30.0, 5.0, 4.0

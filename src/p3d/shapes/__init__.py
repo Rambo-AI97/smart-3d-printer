@@ -13,4 +13,4 @@ from .decor import emboss_text, helical_grooves, flutes, bead_lines, path_stripe
 
 __all__ = ["soften", "rounded_path", "sweep_profile", "export_stl", "check_solid", "tape_plate", "j_hook",
            "s_hook", "nut_pocket", "thread", "SCREWS", "NUTS", "snap_cantilever", "snap_strain",
-           "print_in_place_hinge", "emboss_text", "helical_grooves", "flutes", "bead_lines", "path_stripes", "cut_each"]
+           "print_in_place_hinge", "to_mesh", "capsule", "mesh_cut", "emboss_text", "helical_grooves", "flutes", "bead_lines", "path_stripes", "cut_each"]

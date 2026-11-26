@@ -65,7 +65,7 @@ def _interp(table, s):
     """Smoothstep interpolation of [(s0, v0), (s1, v1), ...]."""
     if s <= table[0][0]:
         return table[0][1]
-    for (s0, v0), (s1, v1) in zip(table, table[1:]):
+    for (s0, v0), (s1, v1) in zip(table, table[1:], strict=False):
         if s <= s1:
             u = (s - s0) / (s1 - s0) if s1 > s0 else 1.0
             return v0 + (v1 - v0) * u * u * (3 - 2 * u)

@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "p3d"
 dynamic = ["version"]
-description = "Slice, print and track a Marlin 3D printer (Ender-3 V3 SE tested) from the command line, with a live dashboard."
+description = "Design, check, slice, print and track any 3D printer: engineering CAD checks, Orca Slicer for 500+ printers, live phone dashboard."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 dependencies = ["pyserial>=3.5", "pillow>=10"]
-keywords = ["3d-printing", "marlin", "orca-slicer", "openscad", "ender-3"]
+keywords = ["3d-printing", "cad", "build123d", "orca-slicer", "klipper", "octoprint", "prusalink", "bambu-lab", "marlin"]
 classifiers = ["Operating System :: POSIX :: Linux", "Programming Language :: Python :: 3", "Topic :: Printing"]
 
 [project.optional-dependencies]
@@ -36,7 +36,7 @@ where = ["src"]
 p3d = ["profiles/*.json", "web/index.html", "model/*.py", "model/*.gd"]
 
 [tool.ruff]
-line-length = 140
+line-length = 200   # long single-line strings are the house style
 target-version = "py311"
 extend-exclude = ["src/p3d/model/to_stl.py"]  # runs inside Blender (bpy)
 

@@ -39,7 +39,8 @@ def _roots():
     out += [pathlib.Path(p) for p in sorted(glob.glob(str(home / "*/squashfs-root/resources/profiles")))]
     out += [pathlib.Path(p) for p in ("/usr/share/OrcaSlicer/resources/profiles", "/usr/share/orca-slicer/resources/profiles",
                                       "/opt/OrcaSlicer/resources/profiles")]
-    out += [pathlib.Path(p) for p in sorted(glob.glob("/var/lib/flatpak/app/com.orcaslicer.OrcaSlicer/*/*/files/share/OrcaSlicer/profiles"))]
+    flat = "/var/lib/flatpak/app/com.orcaslicer.OrcaSlicer/*/*/files/share/OrcaSlicer/profiles"
+    out += [pathlib.Path(p) for p in sorted(glob.glob(flat))]
     out += [config.XDG_CONFIG / "OrcaSlicer/system", home / ".var/app/com.orcaslicer.OrcaSlicer/config/OrcaSlicer/system"]
     return [p for p in out if p.is_dir()]
 

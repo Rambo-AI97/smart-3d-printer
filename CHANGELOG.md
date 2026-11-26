@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+(nothing yet)
+
+## 2.0.0 (2026-11-25)
+
+**Any printer**
+- `p3d setup` asks which printer you have and searches Orca Slicer's 500+ machine profiles (`p3d printers WORDS`); bed size, max height, park and Z-home points come from the profile instead of being hard-coded.
+- Network printers: Klipper (Moonraker), OctoPrint, PrusaLink and Bambu Lab LAN mode, next to USB Marlin. Same status, dashboard, log, spools and alerts; USB-only tools (level, PID, calibration, recover) say so. Bambu jobs are sliced to `.gcode.3mf`.
+- New users default to PLA (`filament` in the config still wins).
+
+**Install**
+- One-line `install.sh`: uv, p3d with the CAD extra, Orca Slicer AppImage, serial access, setup, services, doctor. `p3d update`, `p3d install-cad`.
+- Extras: `cad` (build123d, trimesh, manifold3d, shapely, ...), `bambu` (paho-mqtt), `all`.
+
+**Engineering**
+- `p3d check` / `stress` / `orient` / `coupon` take a build123d design (`.py`) directly. Negative option values work as typed (`--fix-face -x`).
+- `examples/shelf_bracket.py`: a design to try `p3d sheet` on.
+
+**Dashboard**
+- Readable job names in the queue and tracker; upload slices with the loaded filament; round chart ticks; spool names fit.
+- Stats: settings changes are compared per filament (switching PLA/PETG is not a change).
+
+**Breaking: optional integrations are off by default.** `fridge_dir`, `fridge_done_cmd`, `event_cmd`, `knowledge_files`, `cad_python`, `shots_dir` (see config.example.toml). Design sheets and shots go to `<data_dir>/shots`.
+
+## 1.1.x (after 1.1.0)
+
 - Dashboard: upload a model from the phone (`POST /api/upload?name=`, raw body; .stl .3mf .obj .zip, 100 MB cap) or paste a Printables link (`POST /api/upload/link`, public GraphQL API, STL files only). Safe unzip, 3MF/OBJ converted to STL in pure Python, sliced PETG/standard into a model card (never queued or printed). Bed-mesh panel is collapsible (remembered) and capped in height.
 - Slice advisor: `p3d inspect` prints an Advice section (brim for tall parts, supports, heavy settings on small parts, placement and bed mesh, filament vs spool, long prints). `p3d.advisor.advise(info)` for reuse.
   It also runs automatically after every `p3d slice`, `p3d queue add` and dashboard slice/reslice, so problems show before the preview (it caught a 50 mm part sliced without a brim on its first run).

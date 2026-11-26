@@ -191,7 +191,7 @@ body.embed .card{border-color:rgba(255,245,238,.08)}body.embed #ctl{position:sta
 <section class="card upl"><div class="lab">Add a print from this phone (never starts or queues by itself)</div>
 <div class="row"><input type="file" id="up-f-pq" accept=".stl,.3mf,.obj,.step,.stp,.zip"><button class="act go" style="margin:0" onclick="upFile('pq')">Upload &amp; slice</button></div>
 <div class="row"><input type="text" id="up-l-pq" placeholder="or paste a Printables model link"><button class="act" style="margin:0" onclick="upLink('pq')">Fetch</button></div>
-<div class="msg" id="up-m-pq">.stl .3mf .obj .zip up to 100 MB. It is sliced with PETG / standard; check the card in Models, then add it to the queue.</div></section>
+<div class="msg" id="up-m-pq">.stl .3mf .obj .zip up to 100 MB. It is sliced with the loaded filament, standard quality; check the card in Models, then add it to the queue.</div></section>
 <section class="card"><div class="lab">Print queue: runs top to bottom</div><div class="msg" id="pq-fil"></div><div class="msg" id="m-pq"></div><div id="pq-list" class="pcards">–</div></section>
 </div>
 <div id="ph" class="hide">
@@ -201,7 +201,7 @@ body.embed .card{border-color:rgba(255,245,238,.08)}body.embed #ctl{position:sta
 <section class="card upl"><div class="lab">Add a print from this phone (never starts or queues by itself)</div>
 <div class="row"><input type="file" id="up-f-pm" accept=".stl,.3mf,.obj,.step,.stp,.zip"><button class="act go" style="margin:0" onclick="upFile('pm')">Upload &amp; slice</button></div>
 <div class="row"><input type="text" id="up-l-pm" placeholder="or paste a Printables model link"><button class="act" style="margin:0" onclick="upLink('pm')">Fetch</button></div>
-<div class="msg" id="up-m-pm">.stl .3mf .obj .zip up to 100 MB. It is sliced with PETG / standard; check the card in Models, then add it to the queue.</div></section>
+<div class="msg" id="up-m-pm">.stl .3mf .obj .zip up to 100 MB. It is sliced with the loaded filament, standard quality; check the card in Models, then add it to the queue.</div></section>
 <section class="card"><div class="lab">Models: slice with the loaded filament and add to the queue (never starts a print)</div><div class="msg" id="pm-fil"></div><div class="msg" id="m-pm"></div><div id="pm-list" class="pcards">–</div></section>
 </div>
 <div id="kn" class="hide">
@@ -306,9 +306,11 @@ function empty(g,msg){g.x.fillStyle=T.mute;g.x.fillText(msg||'no data yet',8,g.h
 function axes(g,x0,x1,y0,y1,opt={}){const L=34,R=opt.right||6,T=8,B=18,x=g.x;
   const X=v=>L+(v-x0)/((x1-x0)||1)*(g.w-L-R),Y=v=>g.h-B-(v-y0)/((y1-y0)||1)*(g.h-B-T);
   x.strokeStyle=T.line;x.fillStyle=T.mute;x.lineWidth=1;
-  for(let i=0;i<=3;i++){const v=y0+(y1-y0)*i/3,y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(g.w-R,y);x.stroke();x.fillText(+v.toFixed(2),2,y+4)}
+  const rg=Math.abs(y1-y0)||1,p=Math.pow(10,Math.floor(Math.log10(rg/3))),st=[1,2,2.5,5,10].map(m=>m*p).find(m=>rg/m<=4);
+  for(let v=Math.ceil(Math.min(y0,y1)/st)*st;v<=Math.max(y0,y1)+1e-9;v+=st){const y=Y(v);x.beginPath();x.moveTo(L,y);x.lineTo(g.w-R,y);x.stroke();x.fillText(+v.toFixed(2),2,y+4)}
   return{X,Y,L,R,B}}
 const niceMax=v=>{const p=Math.pow(10,Math.floor(Math.log10(v||1))),m=v/p;return(m<=1?1:m<=2?2:m<=5?5:10)*p};
+const jn=n=>String(n||'').replace(/^\d{8}-\d{4}-/,'').replace(/~\d+$/,'');
 function bars(id,weeks,keys,cols){const g=cv(id);if(!weeks.length)return empty(g);
   const mx=niceMax(Math.max(...weeks.map(w=>keys.reduce((s,k)=>s+w[k],0)),1)),a=axes(g,0,weeks.length,0,mx),bw=Math.min(40,(g.w-a.L-6)/weeks.length*.7);
   weeks.forEach((w,i)=>{let acc=0;const cx=a.X(i+.5);keys.forEach((k,j)=>{const v=w[k];if(!v)return;g.x.fillStyle=cols[j];g.x.fillRect(cx-bw/2,a.Y(acc+v),bw,a.Y(acc)-a.Y(acc+v));acc+=v});
@@ -359,7 +361,7 @@ async function post(url,msgId,body){const m=$(msgId);m.textContent='...';
     m.textContent=r.status===403?'Not allowed from this device (add its address to control_from in the p3d config)':(j.ok||j.error||'done');
     tick();queueLoad();return j}catch(e){m.textContent='failed: '+e;return{}}}
 async function queueLoad(){try{const q=await (await fetch('/api/queue',{cache:'no-store'})).json();
-  $('queue').innerHTML=q.map(e=>`<div class="idea">${e.job?`<img class="qth" loading="lazy" src="/api/job/${encodeURIComponent(e.job)}/preview.png" alt="" onerror="this.style.visibility='hidden'">`:''}<span><b>${e.n}.</b> ${esc(e.name)} ${esc(e.note)}</span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
+  $('queue').innerHTML=q.map(e=>`<div class="idea">${e.job?`<img class="qth" loading="lazy" src="/api/job/${encodeURIComponent(e.job)}/preview.png" alt="" onerror="this.style.visibility='hidden'">`:''}<span><b>${e.n}.</b> ${esc(jn(e.name))} <span style="color:var(--mute)">${esc(e.note)}</span></span></div>`).join('')||'queue is empty';$('b-next').disabled=!q.length}catch(e){}}
 // ---- queue page, past prints page ----
 const pic=(j,name)=>j?`<img loading="lazy" src="/api/job/${encodeURIComponent(j)}/preview.png" alt="" onclick="zoom(this.src,'${encodeURIComponent(name||'')}')">`:'<div class="ph">no picture</div>';
 function zoom(src,name){if(!src)return;$('lb-img').src=src;$('lb-t').textContent=decodeURIComponent(name||'');$('lb').showModal()}
@@ -375,7 +377,7 @@ async function hAdd(j,s){if(fwrong(s)&&!confirm(fwarn(s)+'Add it to the queue an
 async function pqLoad(){let q;try{q=await (await fetch('/api/queue',{cache:'no-store'})).json()}catch(e){return}
   $('pq-fil').innerHTML=await loadFil();
   $('pq-list').innerHTML=q.map((e,i)=>`<div class="pc${i?'':' head'}${e.missing?' miss':''}">${pic(e.job,e.name)}<div>
-    <div class="t">${e.n}. ${esc(e.name)}</div>
+    <div class="t">${e.n}. ${esc(jn(e.name))}</div>
     <div class="m">${[+e.est_min>0&&mins(e.est_min),+e.grams>0&&(+e.grams).toFixed(1)+' g',e.filament,e.missing&&'G-code is gone: remove it',(e.pause_at||[]).length&&'pauses before layer '+e.pause_at.join(', '),esc(e.note)].filter(Boolean).join(' · ')}</div>${fbadge(e.sliced)}
     <div class="btns"><button class="act" ${i?'':'disabled'} onclick="qMove(${e.n},${e.n-1},'${encodeURIComponent(e.name)}')">&uarr;</button><button class="act" ${i<q.length-1?'':'disabled'} onclick="qMove(${e.n},${e.n+1},'${encodeURIComponent(e.name)}')">&darr;</button>
     ${e.jid?`<button class="act" onclick="openReslice('job','${encodeURIComponent(e.jid)}')">Reslice</button>`:''}<button class="act" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="qRemove(${e.n},'${encodeURIComponent(e.name)}')">Remove</button>
@@ -433,9 +435,10 @@ function lines(id,labels,series){const g=cv(id);if(!labels.length)return empty(g
   const step=Math.ceil(labels.length/6);labels.forEach((l,i)=>{if(i%step===0)x.fillText(l.slice(5),a.X(i)-10,g.h-4)})}
 function spoolBars(id,sp){const g=cv(id);if(!sp.length)return empty(g,'no spools: p3d spool add');
   const rh=Math.min(34,(g.h-6)/sp.length),x=g.x;
-  sp.forEach((s,i)=>{const y=4+i*rh,w=g.w-150,f=Math.max(0,Math.min(1,s.left_g/(s.start_g||1)));
-    x.fillStyle=T.mute;x.fillText(s.name.slice(0,14),2,y+rh*.62);x.fillStyle=T.line;x.fillRect(100,y+3,w,rh-8);
-    x.fillStyle=s.left_g<100?COL.cancelled:COL.acc;x.fillRect(100,y+3,w*f,rh-8);x.fillStyle=T.fg;x.fillText(Math.round(s.left_g)+' g',104+w,y+rh*.62)})}
+  const LW=Math.min(150,g.w*.4),fit=t=>{t=t.replace(/\s*\d+(\.\d+)?\s*kg$/i,'');while(t.length>3&&x.measureText(t).width>LW-8)t=t.slice(0,-2)+'…';return t};
+  sp.forEach((s,i)=>{const y=4+i*rh,w=g.w-LW-50,f=Math.max(0,Math.min(1,s.left_g/(s.start_g||1)));
+    x.fillStyle=T.mute;x.fillText(fit(s.name),2,y+rh*.62);x.fillStyle=T.line;x.fillRect(LW,y+3,w,rh-8);
+    x.fillStyle=s.left_g<100?COL.cancelled:COL.acc;x.fillRect(LW,y+3,w*f,rh-8);x.fillStyle=T.fg;x.fillText(Math.round(s.left_g)+' g',LW+4+w,y+rh*.62)})}
 function timeline(id,jobs,changes){const g=cv(id);if(!jobs.length)return empty(g);
   const a=axes(g,0,Math.max(jobs.length-1,1),0,5),x=g.x;
   changes.forEach((c,k)=>{const i=jobs.findIndex(j=>j.date===c.date&&j.name===c.name);if(i<0)return;
@@ -577,7 +580,7 @@ function trDraw(){const w=($('tr-q').value||'').toLowerCase().trim(),
   let l=TR.filter(i=>w?JSON.stringify(i).toLowerCase().includes(w):trMd==='all'||OPENST.includes(i.state)||((i.state==='failed'||i.state==='reopened')&&!reprinted.has(i.name)));
   $('tr-list').innerHTML=l.map((i,n)=>{const ch=(i.chain||[]).map(c=>`<span class="pill ${c.state}">${esc(c.name)}</span>`).join(' &rsaquo; ');
     const btns=i.state==='check'?`<div class="btns"><button class="act go" onclick="trVerdict(${TR.indexOf(i)},'pass')"><svg class="ic"><use href="#i-check"/></svg>Pass</button><button class="act bad" onclick="trVerdict(${TR.indexOf(i)},'fail')"><svg class="ic"><use href="#i-x"/></svg>Fail</button></div>`:'';
-    return `<div class="it"><div class="hd"><span class="nm">${esc(i.name)}</span><span class="pill ${i.state}">${i.state}${i.progress?' '+Math.round(i.progress)+'%':''}</span></div>
+    return `<div class="it"><div class="hd"><span class="nm" title="${esc(i.name)}">${esc(jn(i.name))}</span><span class="pill ${i.state}">${i.state}${i.progress?' '+Math.round(i.progress)+'%':''}</span></div>
     <div class="mt">${esc((i.date||'').slice(0,16))}${i.who?' · '+esc(i.who):''}${i.request?' · note #'+esc(i.request):''}${i.tags?' · '+esc(i.tags):''}</div>
     ${i.note?`<div class="mt">${esc(i.note)}</div>`:''}${ch||i.reprint_of?`<div class="chain">${ch?ch+' &rsaquo; ':'reprint of '+esc(i.reprint_of)+' &rsaquo; '}<span class="pill ${i.state}">${esc(i.name)}</span></div>`:''}${btns}</div>`}).join('')||'<span class="msg">nothing here</span>'}
 async function trVerdict(n,v){const i=TR[n],m=$('m-tr');let tags='',note='';

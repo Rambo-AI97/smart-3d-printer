@@ -21,7 +21,7 @@ def section(segs, h=0.1):
     a=np.array([s[:4] for s in segs]); W=np.array([s[4] for s in segs])
     x0,y0=a[:,[0,2]].min()-1,a[:,[1,3]].min()-1; x1,y1=a[:,[0,2]].max()+1,a[:,[1,3]].max()+1
     gx=np.arange(x0,x1,h); gy=np.arange(y0,y1,h); g=np.zeros((len(gy),len(gx)),bool)
-    for (ax,ay,bx,by),w in zip(a,W):
+    for (ax,ay,bx,by),w in zip(a,W, strict=False):
         i0,i1=np.searchsorted(gx,[min(ax,bx)-w,max(ax,bx)+w]); j0,j1=np.searchsorted(gy,[min(ay,by)-w,max(ay,by)+w])
         X,Y=np.meshgrid(gx[i0:i1],gy[j0:j1]); dx,dy=bx-ax,by-ay; L=dx*dx+dy*dy
         t=np.clip(((X-ax)*dx+(Y-ay)*dy)/L,0,1); d2=(X-ax-t*dx)**2+(Y-ay-t*dy)**2

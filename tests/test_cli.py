@@ -93,3 +93,10 @@ def test_setup_yes_writes_config(capsys, monkeypatch):
     code, out, _ = run(capsys, "setup", "--yes")
     text = config.CONFIG_FILE.read_text()
     assert code == 0 and 'port = "/dev/serial/by-id/usb-fake"' in text
+
+
+def test_join_negative_values():
+    from p3d.cli import join_negative
+    assert join_negative(["stress", "m", "--fix-face", "-x", "--dir", "-z", "--load-at", "55,0,5"]) == \
+        ["stress", "m", "--fix-face=-x", "--dir=-z", "--load-at", "55,0,5"]
+    assert join_negative(["orient", "m", "--load-dir", "-1,0,0", "-q"]) == ["orient", "m", "--load-dir=-1,0,0", "-q"]

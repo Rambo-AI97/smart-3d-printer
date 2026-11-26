@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import math
 
-from build123d import (Align, Box, Circle, Cylinder, Helix, Part, Plane, Pos, Rot, Text, Torus, Vector, extrude,
+from build123d import (Align, Circle, Cylinder, Helix, Part, Plane, Pos, Rot, Text, Torus, Vector, extrude,
                        sweep)
 
 

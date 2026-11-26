@@ -833,8 +833,28 @@ def build():
     return p
 
 
+NEG_OK = ("--fix-face", "--dir", "--load-at", "--load-dir", "--z")   # values that may start with '-' (-x, -1,0,0)
+
+
+def join_negative(argv):
+    """['--fix-face', '-x'] -> ['--fix-face=-x'] so argparse doesn't read -x as an option."""
+    out, it = [], iter(argv)
+    for t in it:
+        if t in NEG_OK:
+            nxt = next(it, None)
+            if nxt is not None and nxt.startswith("-") and len(nxt) > 1 and (nxt[1].isdigit() or nxt[1] in "xyz." or "," in nxt):
+                out.append(f"{t}={nxt}")
+                continue
+            out.append(t)
+            if nxt is not None:
+                out.append(nxt)
+            continue
+        out.append(t)
+    return out
+
+
 def main(argv=None):
-    a = build().parse_args(argv)
+    a = build().parse_args(join_negative(sys.argv[1:] if argv is None else argv))
     a.fn(a)
 
 

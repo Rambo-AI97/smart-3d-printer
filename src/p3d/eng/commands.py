@@ -10,8 +10,13 @@ def A(*flags, **kw):
 
 
 def resolve(name):
-    """STL path, or a scad NAME (models/scad/NAME.stl)."""
+    """STL path, a build123d design (.py or models/py/NAME.py, exported to STL first), or a scad NAME (models/scad/NAME.stl)."""
     p = pathlib.Path(name).expanduser()
+    from .. import shapecmds
+    py = p if p.suffix.lower() == ".py" else shapecmds._py_src(name)
+    if py.suffix.lower() == ".py" and py.exists():
+        import json
+        return pathlib.Path(json.loads(shapecmds._run_cad("p3d.shapes.build", py).splitlines()[-1])["stl"]).resolve()
     if p.suffix.lower() == ".stl" or p.exists():
         if not p.exists():
             sys.exit(f"no such model: {p}")
