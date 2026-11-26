@@ -4,10 +4,7 @@
 before you slice, Orca Slicer for any of 500+ printers, background printing, a live phone dashboard and a log that
 learns what works.
 
-[![CI](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml/badge.svg)](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.11%2B-blue)
-![Platform](https://img.shields.io/badge/platform-Linux-lightgrey)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml/badge.svg)](https://github.com/Rambo-AI97/smart-3d-printer/actions/workflows/ci.yml) ![Python](https://img.shields.io/badge/python-3.11%2B-blue) ![Platform](https://img.shields.io/badge/platform-Linux-lightgrey) [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 <p align="center"><img src="docs/screens/engineering.jpg" width="88%" alt="Design sheet of a shelf bracket (front, side, top, iso, dimensions, thinnest wall) above the p3d check and p3d stress results"></p>
 
