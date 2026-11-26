@@ -140,7 +140,8 @@ def notes_cmd(n, text):
     tpl = config.get().raw.get("fridge_done_cmd") or ""
     if not tpl:
         return []
-    return shlex.split(tpl.replace("{n}", shlex.quote(str(int(n)))).replace("{text}", shlex.quote(text)))
+    argv = shlex.split(tpl.replace("{n}", shlex.quote(str(int(n)))).replace("{text}", shlex.quote(text)))
+    return [os.path.expanduser(argv[0]), *argv[1:]] if argv else argv
 
 
 def notes_done(n, text):
