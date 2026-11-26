@@ -902,6 +902,49 @@ def level_last():
     return None
 
 
+_FIL = {"proc": None, "msg": ""}
+
+
+def fil_running():
+    pr = _FIL["proc"]
+    return pr is not None and pr.poll() is None
+
+
+def fil_cmd(action):
+    """Filament change: 'heat' starts `p3d filament` (holds the port, nozzle hot); extrude / retract / unload / done
+    are fed to its stdin. Raises Refuse."""
+    if cap_refusal("level"):
+        raise runner.Refuse(cap_refusal("level"))
+    if action == "heat":
+        if fil_running():
+            return "already hot: use Extrude / Retract"
+        if config.print_running() or level_running():
+            raise runner.Refuse("the printer port is busy (print, cooldown or bed check)")
+        pr = subprocess.Popen([sys.executable, "-u", "-m", "p3d", "filament"], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+        _FIL.update(proc=pr, msg="heating...")
+
+        def pump():
+            for line in pr.stdout:
+                line = ANSI.sub("", line).strip()
+                if line:
+                    _FIL["msg"] = line
+            _FIL["msg"] = _FIL["msg"] if "heater off" in _FIL["msg"] else f"stopped: {_FIL['msg']}"
+        threading.Thread(target=pump, daemon=True).start()
+        return "heating the nozzle; Extrude / Retract work once it is hot"
+    if not fil_running():
+        raise runner.Refuse("press Heat nozzle first")
+    if "ready" not in _FIL["msg"]:
+        raise runner.Refuse("wait: " + _FIL["msg"])
+    line = {"extrude": "extrude 10", "retract": "retract 10", "unload": "retract 80", "done": "done"}.get(action)
+    if not line:
+        raise runner.Refuse("unknown filament action")
+    _FIL["msg"] = "working..." if action != "done" else "heater off..."
+    _FIL["proc"].stdin.write(line + "\n"); _FIL["proc"].stdin.flush()
+    return {"extrude": "extruding 10 mm", "retract": "retracting 10 mm", "unload": "unloading 80 mm: pull the filament out when it stops",
+            "done": "heater off"}[action]
+
+
 def cooldown_start():
     if cap_refusal("level"):   # the cooldown watcher talks USB serial
         raise runner.Refuse(cap_refusal("level"))
@@ -942,7 +985,9 @@ def controls():
     return {"status": st, "why": why, "retry_name": (last or {}).get("name", ""),
             **{k: k not in why for k in ("pause", "resume", "stop", "next", "retry", "level", "show")}, "cooldown": not lvl and "cooldown" not in why, "lstop": lvl,
             "printer": printer_info(),
-            "spools": spool_list()}
+            "spools": spool_list(),
+            "fil": {"on": fil_running(), "msg": _FIL["msg"],
+                    "can": not (live or lvl) and not cap_refusal("level")}}
 
 
 def spool_list():
@@ -1203,7 +1248,8 @@ class H(BaseHTTPRequestHandler):
         if path not in ("/api/cancel", "/api/pause", "/api/pause/remove", "/api/resume", "/api/queue/next",
                         "/api/queue/move", "/api/verdict",
                         "/api/queue/remove", "/api/queue/add", "/api/models/slice", "/api/models/delete", "/api/ideas", "/api/retry",
-                        "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool", "/api/upload", "/api/upload/link"):
+                        "/api/cooldown", "/api/level", "/api/level/show", "/api/level/stop", "/api/knowledge/save", "/api/spool", "/api/upload", "/api/upload/link",
+                        "/api/fil/heat", "/api/fil/extrude", "/api/fil/retract", "/api/fil/unload", "/api/fil/done"):
             return self.send(b"not found", "text/plain", 404)
         ip = self.client_address[0].removeprefix("::ffff:")
         c = config.get()
@@ -1280,6 +1326,11 @@ class H(BaseHTTPRequestHandler):
                     if path == "/api/knowledge/save":
                         return self.reply({"ok": knowledge_save(self.body())})
                     return self.reply({"ok": "started", "task": level_start(show=path.endswith("show"))}, 202)
+                except runner.Refuse as e:
+                    return self.reply({"error": str(e)}, 409)
+            if path.startswith("/api/fil/"):
+                try:
+                    return self.reply({"ok": fil_cmd(path.rsplit("/", 1)[1])})
                 except runner.Refuse as e:
                     return self.reply({"error": str(e)}, 409)
             if path == "/api/verdict":

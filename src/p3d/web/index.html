@@ -131,6 +131,7 @@ body.embed .card{border-color:rgba(255,245,238,.08)}body.embed #ctl{position:sta
 <button class="act" id="c-show" onclick="ctl('/api/level/show')">Last bed mesh</button>
 <button class="act hide" id="c-lstop" style="color:var(--bad);border-color:var(--bad);background:var(--badbg)" onclick="if(confirm('Stop the bed check? The bed heater goes off.'))ctl('/api/level/stop')">Stop bed check</button>
 <button class="act" id="c-cool" onclick="ctl('/api/cooldown')">Cooldown</button>
+<span id="c-fil"><button class="act" id="f-heat" onclick="ctl('/api/fil/heat')">Heat nozzle</button><button class="act" id="f-ext" onclick="ctl('/api/fil/extrude')">Extrude 10</button><button class="act" id="f-ret" onclick="ctl('/api/fil/retract')">Retract 10</button><button class="act" id="f-unl" onclick="ctl('/api/fil/unload')">Unload 80</button><button class="act" id="f-done" onclick="ctl('/api/fil/done')">Heater off</button></span>
 <label class="spl" title="The loaded spool decides the filament used for slicing and the queue spool check">Loaded filament <select id="c-spool" onchange="spoolPick(this)"></select></label></div>
 <div class="msg" id="m-bar"></div><div class="msg" id="m-task"></div><div id="lvl" class="hide col"><div id="lvl-hd" onclick="lvlTog()"><span id="lvl-ar">&#9656;</span> Bed mesh <span class="s" id="lvl-sum"></span></div><div id="lvl-body"><canvas id="lvl-cv"></canvas><div class="msg" id="lvl-txt"></div></div></div></section>
 <div id="live">
@@ -473,13 +474,15 @@ async function ctlLoad(){try{CT=await (await fetch('/api/controls',{cache:'no-st
   $('c-lstop').classList.toggle('hide',!CT.lstop);
   const PC=(CT.printer||{}).caps||[];for(const[cap,id]of[['level','c-level'],['level','c-show'],['level','c-cool'],['pause','c-pause']])$(id).classList.toggle('hide',!PC.includes(cap));
   spoolFill(CT.spools);
+  {const F=CT.fil||{},rdy=F.on&&/ready/.test(F.msg||'');$('f-heat').disabled=!F.can||F.on;for(const id of['f-ext','f-ret','f-unl'])$(id).disabled=!rdy;$('f-done').disabled=!F.on;
+   $('c-fil').classList.toggle('hide',!PC.includes('level'));FILMSG=(F.on||/heater off|stopped/.test(F.msg||''))?'Filament: '+F.msg:'';}
   const T=await (await fetch('/api/tasks',{cache:'no-store'})).json(),run=T.filter(t=>t.state==='running'),lv=T.filter(t=>t.kind==='level'&&t.state==='done').pop();
-  $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg+(t.kind==='level'?lvlEta(t):'')).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');
+  $('m-task').textContent=run.length?run.map(t=>(t.kind==='level'?'Bed: ':'Slice: ')+t.msg+(t.kind==='level'?lvlEta(t):'')).join(' | '):(T.length&&T[T.length-1].kind==='level'&&T[T.length-1].state==='error'?'Bed check failed: '+T[T.length-1].msg:'');if(FILMSG)$('m-task').textContent=FILMSG+($('m-task').textContent?' | '+$('m-task').textContent:'');
   const lr=run.find(t=>t.kind==='level'&&t.model==='bed check');if(lr){LVRUN=true;lvlLive(lr);lvlSeen=''}else{LVS=[];if(LVRUN){LVRUN=false;lvlApply()}}
   if(lv&&lv.id!==lvlSeen){lvlSeen=lv.id;lvlDraw(lv.grid,lv.span,lv.verdict,'just now',lv.turns)}
   else if(!lvlSeen){lvlSeen='-';const l=await (await fetch('/api/level/last',{cache:'no-store'})).json();if(l)lvlDraw(l.grid,l.span,l.verdict,l.when,l.turns)}
   }catch(e){}}
-let SPK='';
+let SPK='',FILMSG='';
 function spoolFill(S){if(!S)return;const sel=$('c-spool'),k=JSON.stringify(S);if(k===SPK||document.activeElement===sel)return;SPK=k;
   sel.innerHTML=S.list.map(s=>`<option value="${escH(s.name).replace(/"/g,'&quot;')}"${s.name===S.active?' selected':''}>${escH(s.name)} · ${s.material.toUpperCase()} · ${s.left_g} g</option>`).join('')
     +(S.active?'':'<option value="" selected>(none)</option>')+'<option value="+">+ New spool…</option>';sel.dataset.mats=S.materials.join(',')}

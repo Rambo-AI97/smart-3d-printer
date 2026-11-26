@@ -526,6 +526,13 @@ def cmd_pid(a):
     pid.main(a.hotend, a.bed)
 
 
+def cmd_filament(a):
+    _need_cap("level")
+    _idle_port()
+    from . import filament
+    filament.main(a.temp)
+
+
 def cmd_probe(_):
     _need_cap("probe")
     _idle_port()
@@ -756,6 +763,8 @@ COMMANDS = {
          [A("test", choices=["temp", "retraction", "flow", "firstlayer"]), FIL]),
         ("pid", cmd_pid, "PID-tune hotend and bed, save to EEPROM",
          [A("--hotend", type=int, default=220), A("--bed", type=int, default=60)]),
+        ("filament", cmd_filament, "filament change: heat, then type extrude MM / retract MM / done",
+         [A("--temp", type=int, default=None, help="nozzle C (default: active spool material)")]),
         ("probe", cmd_probe, "read-only check: firmware, settings, temps", []),
         ("profiles", cmd_profiles, "rebuild the Orca CLI profiles from Orca's presets", []),
     ],
