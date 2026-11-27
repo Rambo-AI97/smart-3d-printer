@@ -902,7 +902,7 @@ def level_last():
     return None
 
 
-_FIL = {"proc": None, "msg": ""}
+_FIL = {"proc": None, "msg": "", "pending": None}
 
 
 def fil_running():
@@ -915,11 +915,14 @@ def fil_cmd(action):
     are fed to its stdin. Raises Refuse."""
     if cap_refusal("level"):
         raise runner.Refuse(cap_refusal("level"))
-    if action == "heat":
+    line = {"extrude": "extrude 10", "retract": "retract 10", "unload": "retract 80", "done": "done"}.get(action)
+    said = {"extrude": "extrude 10 mm", "retract": "retract 10 mm", "unload": "unload 80 mm"}
+    if action == "heat" or (action in said and not fil_running()):
         if fil_running():
             return "already hot: use Extrude / Retract"
         if config.print_running() or level_running():
-            raise runner.Refuse("the printer port is busy (print, cooldown or bed check)")
+            raise runner.Refuse("the printer port is busy (print, cooldown or bed check); use the printer's own screen")
+        _FIL["pending"] = line if action in said else None
         pr = subprocess.Popen([sys.executable, "-u", "-m", "p3d", "filament"], stdin=subprocess.PIPE,
                               stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
         _FIL.update(proc=pr, msg="heating...")
@@ -929,16 +932,22 @@ def fil_cmd(action):
                 line = ANSI.sub("", line).strip()
                 if line:
                     _FIL["msg"] = line
+                    if "ready" in line and _FIL.get("pending"):   # a button pressed before the nozzle was hot
+                        todo, _FIL["pending"] = _FIL["pending"], None
+                        _FIL["msg"] = "working..."
+                        pr.stdin.write(todo + "\n"); pr.stdin.flush()
             _FIL["msg"] = _FIL["msg"] if "heater off" in _FIL["msg"] else f"stopped: {_FIL['msg']}"
         threading.Thread(target=pump, daemon=True).start()
+        if action in said:
+            return f"heating the nozzle; will {said[action]} as soon as it is hot"
         return "heating the nozzle; Extrude / Retract work once it is hot"
-    if not fil_running():
-        raise runner.Refuse("press Heat nozzle first")
-    if "ready" not in _FIL["msg"]:
-        raise runner.Refuse("wait: " + _FIL["msg"])
-    line = {"extrude": "extrude 10", "retract": "retract 10", "unload": "retract 80", "done": "done"}.get(action)
     if not line:
         raise runner.Refuse("unknown filament action")
+    if not fil_running():
+        return "heater already off"
+    if action != "done" and "ready" not in _FIL["msg"]:
+        _FIL["pending"] = line
+        return f"will {said[action]} when ready ({_FIL['msg']})"
     _FIL["msg"] = "working..." if action != "done" else "heater off..."
     _FIL["proc"].stdin.write(line + "\n"); _FIL["proc"].stdin.flush()
     return {"extrude": "extruding 10 mm", "retract": "retracting 10 mm", "unload": "unloading 80 mm: pull the filament out when it stops",
